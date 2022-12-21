@@ -11,7 +11,12 @@
 
 void Render_FM_Demod(Broadcast_FM_Demod& demod);
 void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls);
-void Render_FM_Demod_Plots(Broadcast_FM_Demod& demod);
+void Render_FM_Demod_Other_Plots(Broadcast_FM_Demod& demod);
+void Render_FM_Demod_Audio_Plots(Broadcast_FM_Demod& demod);
+void Render_FM_Demod_RDS_Plots(Broadcast_FM_Demod& demod);
+void Render_FM_Demod_Pilot_Plots(Broadcast_FM_Demod& demod);
+
+void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod);
 void Render_Magnitude_Spectrum_Controls(Calculate_FFT_Mag& calc);
 // Custom plot for rendering magnitude spectrum of FM demodulator output signal
 void Render_FM_Demod_Magnitude_Spectrum(tcb::span<const float> x, const float Fs, const Broadcast_FM_Demod_Analog_Parameters& config, const ImPlotRange range, const char* label);
@@ -65,7 +70,6 @@ void PlotConstellationSubplot(tcb::span<const std::complex<float>> x, const char
     }
 }
 
-
 void RenderApp(App& app) {
     if (ImGui::Begin("Audio Controls")) {
         auto& device_list = app.GetPortAudioDeviceList();
@@ -73,15 +77,74 @@ void RenderApp(App& app) {
         RenderPortAudioControls(device_list, audio_output);
     }
     ImGui::End();
+
+    ImGui::PushID("FM Demod GUI");
     Render_FM_Demod(app.GetFMDemod());
+    ImGui::PopID();
 }
 
 void Render_FM_Demod(Broadcast_FM_Demod& demod) {
-    Render_FM_Demod_Controls(demod.GetControls());
-    Render_FM_Demod_Plots(demod);
+    if (ImGui::Begin("FM Demodulator Controls")) {
+        Render_FM_Demod_Controls(demod.GetControls());
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("FM Demodulator Other Signals")) {
+        auto id = ImGui::GetID("Dockspace FM Demod Other Signals");
+        ImGui::DockSpace(id);
+        ImGui::PushID(id);
+        Render_FM_Demod_Other_Plots(demod);
+        ImGui::PopID();
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("FM Demodulator Audio Signals")) {
+        auto id = ImGui::GetID("Dockspace FM Demod Audio Signals");
+        ImGui::DockSpace(id);
+        ImGui::PushID(id);
+        Render_FM_Demod_Audio_Plots(demod);
+        ImGui::PopID();
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("FM Demodulator RDS Signals")) {
+        auto id = ImGui::GetID("Dockspace FM Demod RDS Signals");
+        ImGui::DockSpace(id);
+        ImGui::PushID(id);
+        Render_FM_Demod_RDS_Plots(demod);
+        ImGui::PopID();
+    }
+    ImGui::End();
+    
+    if (ImGui::Begin("FM Demodulator Pilot Signals")) {
+        auto id = ImGui::GetID("Dockspace FM Demod Pilot Signals");
+        ImGui::DockSpace(id);
+        ImGui::PushID(id);
+        Render_FM_Demod_Pilot_Plots(demod);
+        ImGui::PopID();
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("FM Demodulator Spectrums")) {
+        auto id = ImGui::GetID("Dockspace FM Demod Spectrums");
+        ImGui::DockSpace(id);
+        ImGui::PushID(id);
+        Render_FM_Demod_Spectrums(demod);
+        ImGui::PopID();
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("RDS BPSK Demodulator")) {
+        auto id = ImGui::GetID("Dockspace RDS BPSK");
+        ImGui::DockSpace(id);
+        ImGui::PushID(id);
+        Render_BPSK_Sync(demod.GetBPSKSync());
+        ImGui::PopID();
+    }
+    ImGui::End();
 }
 
-void Render_FM_Demod_Plots(Broadcast_FM_Demod& demod) {
+void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
     if (ImGui::Begin("Baseband Spectrum")) {
         if (ImPlot::BeginPlot("Baseband Spectrum")) {
             auto x = demod.GetBasebandMagnitudeSpectrum();
@@ -284,136 +347,6 @@ void Render_FM_Demod_Plots(Broadcast_FM_Demod& demod) {
         Render_Magnitude_Spectrum_Controls(demod.GetPLLPilotMagnitudeSpectrumControls());
     }
     ImGui::End();
-
-    if (ImGui::Begin("IQ Signal")) {
-        if (ImPlot::BeginPlot("IQ Signal")) {
-            auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetIQSignal();
-            auto label = "IQ Signal";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
-
-
-    if (ImGui::Begin("Pilot")) {
-        if (ImPlot::BeginPlot("Pilot")) {
-            auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetPilotOutput();
-            auto label = "Pilot";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("PLL")) {
-        if (ImPlot::BeginPlot("PLL")) {
-            auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetPLLOutput();
-            auto label = "PLL";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("PLL Phase Error")) {
-        if (ImPlot::BeginPlot("PLL Phase Error")) {
-            auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x0 = demod.Get_PLL_Raw_Phase_Error_Output();
-            auto x1 = demod.Get_PLL_LPF_Phase_Error_Output();
-            auto label0 = "Raw";
-            auto label1 = "LPF";
-
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            ImPlot::PlotLine(label0, x0.data(), (int)x0.size());
-            ImPlot::PlotLine(label1, x1.data(), (int)x1.size());
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("Audio Output")) {
-        if (ImPlot::BeginPlot("Audio Output")) {
-            auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetStereoOut();
-            auto label = "Audio Output";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotFrameLine(label, x.data(), (int)x.size());
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("Audio L+R")) {
-        if (ImPlot::BeginPlot("Audio L+R")) {
-            auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetLPRAudioOutput();
-            auto label = "Audio L+R";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("Audio L-R")) {
-        if (ImPlot::BeginPlot("Audio L-R")) {
-            auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetLMRAudioOutput();
-            auto label = "Audio L-R";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("RDS Signal")) {
-        PlotConstellationSubplot(demod.GetRDSOutput(), "###RDS Signal");
-    }
-    ImGui::End();
-
-    Render_BPSK_Sync(demod.GetBPSKSync());
-
-    if (ImGui::Begin("RDS Downsampled")) {
-        PlotConstellationSubplot(demod.Get_RDS_Downsampled_Output(), "###RDS Downsampled");
-    };
-    ImGui::End();
-
-    if (ImGui::Begin("RDS Raw Output Symbols")) {
-        PlotConstellationSubplot(demod.GetRDSRawSymbols(), "###RDS Raw Output Symbols");
-    };
-    ImGui::End();
-
-    if (ImGui::Begin("RDS Pred Symbols")) {
-        if (ImPlot::BeginPlot("RDS Pred Symbols")) {
-            ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImPlotCond_Once);
-            ImPlot::SetupAxis(ImAxis_Y1, NULL, ImPlotAxisFlags_AutoFit);
-            const float marker_size = 3.0f;
-            auto x = demod.GetRDSPredSymbols();
-            const float x_range = 2.0f; // -1.0f to 1.0f
-            const float x_step = 0.1f;
-            const int total_bins = (int)(x_range/x_step);
-            ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.5f);
-            ImPlot::PlotHistogram("BPSK", x.data(), (int)x.size(), total_bins, 1.0, ImPlotRange(-1.0f, 1.0f));
-            ImPlot::PopStyleVar();
-            ImPlot::EndPlot();
-        }
-    }
-    ImGui::End();
 }
 
 void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls) {
@@ -436,19 +369,16 @@ void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls) {
         }
     };
 
-    if (ImGui::Begin("FM Demod Controls")) {
-        if (ImGui::BeginCombo("Audio Output", GetOutputLabel(curr_output_mode))) {
-            RenderOutputSelectable(AudioOut::STEREO);
-            RenderOutputSelectable(AudioOut::LPR);
-            RenderOutputSelectable(AudioOut::LMR);
-            ImGui::EndCombo();
-        }
-
-        ImGui::SliderFloat("L-R gain", &controls.audio_stereo_mix_factor, 0.0f, 10.0f);
-        ImGui::Checkbox("L-R Denoise LPF", &controls.is_lmr_lpf);
-        ImGui::Checkbox("Pilot peak filter", &controls.is_pilot_tone_peak_filter);
+    if (ImGui::BeginCombo("Audio Output", GetOutputLabel(curr_output_mode))) {
+        RenderOutputSelectable(AudioOut::STEREO);
+        RenderOutputSelectable(AudioOut::LPR);
+        RenderOutputSelectable(AudioOut::LMR);
+        ImGui::EndCombo();
     }
-    ImGui::End();
+
+    ImGui::SliderFloat("L-R gain", &controls.audio_stereo_mix_factor, 0.0f, 10.0f);
+    ImGui::Checkbox("L-R Denoise LPF", &controls.is_lmr_lpf);
+    ImGui::Checkbox("Pilot peak filter", &controls.is_pilot_tone_peak_filter);
 }
 
 void Render_Magnitude_Spectrum_Controls(Calculate_FFT_Mag& calc) {
@@ -543,18 +473,18 @@ void Render_FM_Demod_Magnitude_Spectrum(tcb::span<const float> x, const float Fs
 }
 
 void Render_BPSK_Sync(BPSK_Synchroniser& sync) {
-    if (ImGui::Begin("RDS PLL")) {
-        PlotConstellationSubplot(sync.GetPLLSymbols(), "###RDS PLL");
+    if (ImGui::Begin("PLL Symbols")) {
+        PlotConstellationSubplot(sync.GetPLLSymbols(), "###PLL Symbols");
     };
     ImGui::End();
 
-    if (ImGui::Begin("RDS Triggers")) {
-        if (ImPlot::BeginPlot("RDS Triggers")) {
+    if (ImGui::Begin("Triggers")) {
+        if (ImPlot::BeginPlot("Triggers")) {
             auto range = ImPlotRange(-0.5f, 1.5f);
             auto x0 = sync.GetZeroCrossings();
             auto x1 = sync.GetIntDumpTriggers();
-            auto label0 = "ZCD";
-            auto label1 = "Int+Dump";
+            auto label0 = "Zero Crossing Detector";
+            auto label1 = "Integrate & Dump";
             ImPlot::SetupAxes("Sample", "Amplitude");
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
             ImPlot::PlotStems(label0, reinterpret_cast<const uint8_t*>(x0.data()), (int)x0.size());
@@ -564,8 +494,8 @@ void Render_BPSK_Sync(BPSK_Synchroniser& sync) {
     };
     ImGui::End();
 
-    if (ImGui::Begin("RDS TED")) {
-        if (ImPlot::BeginPlot("RDS TED Phase Errors")) {
+    if (ImGui::Begin("Timing Error Detector")) {
+        if (ImPlot::BeginPlot("Phase Error")) {
             auto range = ImPlotRange(-1.5f, 1.5f);
             auto x0 = sync.GetTEDRawPhaseError();
             auto x1 = sync.GetTEDPIPhaseError();
@@ -580,11 +510,11 @@ void Render_BPSK_Sync(BPSK_Synchroniser& sync) {
     };
     ImGui::End();
 
-    if (ImGui::Begin("RDS Int+Dump Filter")) {
-        if (ImPlot::BeginPlot("RDS Integrator+Dump Filter")) {
+    if (ImGui::Begin("Integrate & Dump Filter")) {
+        if (ImPlot::BeginPlot("Integrator & Dump Filter")) {
             auto range = ImPlotRange(-1.5f, 1.5f);
             auto x = sync.GetIntDumpFilter();
-            auto label = "Integrate+Dump";
+            auto label = "Integrate & Dump";
             ImPlot::SetupAxes("Sample", "Amplitude");
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
             PlotComplexLine(label, x.data(), (int)x.size());
@@ -593,8 +523,8 @@ void Render_BPSK_Sync(BPSK_Synchroniser& sync) {
     };
     ImGui::End();
 
-    if (ImGui::Begin("RDS PLL")) {
-        if (ImPlot::BeginPlot("RDS PLL Phase Error")) {
+    if (ImGui::Begin("PLL##bpsk_plot")) {
+        if (ImPlot::BeginPlot("Phase Error")) {
             auto range = ImPlotRange(-1.5f, 1.5f);
             auto x0 = sync.GetPLLRawPhaseError();
             auto x1 = sync.GetPLLPIPhaseError();
@@ -607,5 +537,140 @@ void Render_BPSK_Sync(BPSK_Synchroniser& sync) {
             ImPlot::EndPlot();
         }
     };
+    ImGui::End();
+}
+
+void Render_FM_Demod_Other_Plots(Broadcast_FM_Demod& demod) {
+    if (ImGui::Begin("IQ Signal")) {
+        if (ImPlot::BeginPlot("IQ Signal")) {
+            auto range = ImPlotRange(-1.0f, 1.0f);
+            auto x = demod.GetIQSignal();
+            auto label = "IQ Signal";
+            ImPlot::SetupAxes("Sample", "Amplitude");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            PlotComplexLine(label, x.data(), (int)x.size());
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+}
+
+void Render_FM_Demod_Audio_Plots(Broadcast_FM_Demod& demod) {
+    if (ImGui::Begin("Audio Output")) {
+        if (ImPlot::BeginPlot("Audio Output")) {
+            auto range = ImPlotRange(-1.0f, 1.0f);
+            auto x = demod.GetStereoOut();
+            auto label = "Audio Output";
+            ImPlot::SetupAxes("Sample", "Amplitude");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            PlotFrameLine(label, x.data(), (int)x.size());
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Audio L+R")) {
+        if (ImPlot::BeginPlot("Audio L+R")) {
+            auto range = ImPlotRange(-1.0f, 1.0f);
+            auto x = demod.GetLPRAudioOutput();
+            auto label = "Audio L+R";
+            ImPlot::SetupAxes("Sample", "Amplitude");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            PlotComplexLine(label, x.data(), (int)x.size());
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Audio L-R")) {
+        if (ImPlot::BeginPlot("Audio L-R")) {
+            auto range = ImPlotRange(-1.0f, 1.0f);
+            auto x = demod.GetLMRAudioOutput();
+            auto label = "Audio L-R";
+            ImPlot::SetupAxes("Sample", "Amplitude");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            PlotComplexLine(label, x.data(), (int)x.size());
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+}
+
+void Render_FM_Demod_RDS_Plots(Broadcast_FM_Demod& demod) {
+    if (ImGui::Begin("RDS Signal")) {
+        PlotConstellationSubplot(demod.GetRDSOutput(), "###RDS Signal");
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("RDS Downsampled")) {
+        PlotConstellationSubplot(demod.Get_RDS_Downsampled_Output(), "###RDS Downsampled");
+    };
+    ImGui::End();
+
+    if (ImGui::Begin("RDS Raw Output Symbols")) {
+        PlotConstellationSubplot(demod.GetRDSRawSymbols(), "###RDS Raw Output Symbols");
+    };
+    ImGui::End();
+
+    if (ImGui::Begin("RDS Pred Symbols")) {
+        if (ImPlot::BeginPlot("RDS Pred Symbols")) {
+            ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImPlotCond_Once);
+            ImPlot::SetupAxis(ImAxis_Y1, NULL, ImPlotAxisFlags_AutoFit);
+            const float marker_size = 3.0f;
+            auto x = demod.GetRDSPredSymbols();
+            const float x_range = 2.0f; // -1.0f to 1.0f
+            const float x_step = 0.1f;
+            const int total_bins = (int)(x_range/x_step);
+            ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.5f);
+            ImPlot::PlotHistogram("BPSK", x.data(), (int)x.size(), total_bins, 1.0, ImPlotRange(-1.0f, 1.0f));
+            ImPlot::PopStyleVar();
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+}
+
+void Render_FM_Demod_Pilot_Plots(Broadcast_FM_Demod& demod) {
+    if (ImGui::Begin("Pilot")) {
+        if (ImPlot::BeginPlot("Pilot")) {
+            auto range = ImPlotRange(-1.5f, 1.5f);
+            auto x = demod.GetPilotOutput();
+            auto label = "Pilot";
+            ImPlot::SetupAxes("Sample", "Amplitude");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            PlotComplexLine(label, x.data(), (int)x.size());
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("PLL##pilot_plot")) {
+        if (ImPlot::BeginPlot("PLL")) {
+            auto range = ImPlotRange(-1.5f, 1.5f);
+            auto x = demod.GetPLLOutput();
+            auto label = "PLL";
+            ImPlot::SetupAxes("Sample", "Amplitude");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            PlotComplexLine(label, x.data(), (int)x.size());
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("PLL Phase Error")) {
+        if (ImPlot::BeginPlot("PLL Phase Error")) {
+            auto range = ImPlotRange(-1.0f, 1.0f);
+            auto x0 = demod.Get_PLL_Raw_Phase_Error_Output();
+            auto x1 = demod.Get_PLL_LPF_Phase_Error_Output();
+            auto label0 = "Raw";
+            auto label1 = "LPF";
+
+            ImPlot::SetupAxes("Sample", "Amplitude");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            ImPlot::PlotLine(label0, x0.data(), (int)x0.size());
+            ImPlot::PlotLine(label1, x1.data(), (int)x1.size());
+            ImPlot::EndPlot();
+        }
+    }
     ImGui::End();
 }
