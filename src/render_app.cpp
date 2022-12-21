@@ -62,6 +62,7 @@ void PlotConstellationSubplot(tcb::span<const std::complex<float>> x, const char
 
         if (ImPlot::BeginPlot("Time Plot")) {
             ImPlot::SetupAxisLinks(ImAxis_Y1, &y_min, &y_max);
+            ImPlot::SetupAxis(ImAxis_X1, NULL, ImPlotAxisFlags_AutoFit);
             ImPlot::PlotLine("I", &buf[0], N, 1, 0, 0, 0, sizeof(std::complex<float>));
             ImPlot::PlotLine("Q", &buf[1], N, 1, 0, 0, 0, sizeof(std::complex<float>));
             ImPlot::EndPlot();
@@ -614,16 +615,30 @@ void Render_FM_Demod_RDS_Plots(Broadcast_FM_Demod& demod) {
 
     if (ImGui::Begin("RDS Pred Symbols")) {
         if (ImPlot::BeginPlot("RDS Pred Symbols")) {
-            ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImPlotCond_Once);
-            ImPlot::SetupAxis(ImAxis_Y1, NULL, ImPlotAxisFlags_AutoFit);
-            const float marker_size = 3.0f;
             auto x = demod.GetRDSPredSymbols();
-            const float x_range = 2.0f; // -1.0f to 1.0f
+            // BPSK symbols are normalised to [-1.0f, +1.0f] with noise added
+            const float x_width = 2.0f;             
+            const float x_range = 2.0f*x_width; 
             const float x_step = 0.1f;
             const int total_bins = (int)(x_range/x_step);
+
+            ImPlot::SetupAxisLimits(ImAxis_X1, -x_width, +x_width, ImPlotCond_Once);
+            ImPlot::SetupAxis(ImAxis_Y1, NULL, ImPlotAxisFlags_AutoFit);
+
             ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.5f);
-            ImPlot::PlotHistogram("BPSK", x.data(), (int)x.size(), total_bins, 1.0, ImPlotRange(-1.0f, 1.0f));
+            ImPlot::PlotHistogram("BPSK counts", x.data(), (int)x.size(), total_bins, 1.0f, ImPlotRange(-x_width, +x_width));
             ImPlot::PopStyleVar();
+
+            const int alpha = 125;
+            const auto COL_RED = ImColor(255,0,0,alpha);
+            const auto COL_BLUE = ImColor(0,0,255,alpha);
+            double xline_0 =  0.0f;
+            double xline_1 = -1.0f;
+            double xline_2 = +1.0f;
+            int line_id = 0;
+            ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_1, COL_BLUE, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_2, COL_BLUE, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::EndPlot();
         }
     }

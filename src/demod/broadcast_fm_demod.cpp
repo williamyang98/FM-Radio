@@ -447,7 +447,7 @@ void Broadcast_FM_Demod::SynchroniseRDS() {
     for (int i = 0; i < rds_total_symbols; i++) {
         // Output symbols are aligned to the imaginary axis
         const float v = rds_raw_sym_buf[i].imag();
-        rds_pred_sym_buf[i] = clamp(v, -1.0f, 1.0f);
+        rds_pred_sym_buf[i] = v;
     }
 }
 
