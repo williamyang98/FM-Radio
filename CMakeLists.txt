@@ -63,6 +63,7 @@ set(DEMOD_DIR ${SRC_DIR}/demod)
 add_library(demod_lib STATIC
     ${DEMOD_DIR}/fm_demod.cpp
     ${DEMOD_DIR}/broadcast_fm_demod.cpp
+    ${DEMOD_DIR}/bpsk_synchroniser.cpp
     ${DEMOD_DIR}/pll_mixer.cpp
     ${DEMOD_DIR}/local_oscillator.cpp
     ${DEMOD_DIR}/trigger_cooldown.cpp

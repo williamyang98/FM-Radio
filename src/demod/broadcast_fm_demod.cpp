@@ -10,6 +10,8 @@
 #include "dsp/fftshift.h"
 #include "dsp/clamp.h"
 
+#include "demod/bpsk_synchroniser.h"
+
 constexpr size_t SIMD_ALIGN_AMOUNT = 32;
 
 Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
@@ -51,14 +53,8 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         pll_raw_phase_error,    BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
         // 4. RDS synchronisation
         rds_ds_buf,             BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_zcd,                BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_int_dump_trigger,   BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_ted_raw_phase_error,BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_ted_lpf_phase_error,BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_pll_phase_error,    BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_int_dump_filter_buf,BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_bpsk_raw_symbols,   BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
-        rds_bpsk_symbols,       BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
+        rds_raw_sym_buf,        BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
+        rds_pred_sym_buf,       BufferParameters{ (size_t)block_size_ds_rds, SIMD_ALIGN_AMOUNT },
         // 5. Audio framing
         audio_stereo_mixer_buf, BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
         audio_stereo_out_buf,   BufferParameters{ (size_t)block_size_audio_stereo_out, SIMD_ALIGN_AMOUNT },
@@ -74,7 +70,11 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         fft_audio_lmr_buf,      BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
         fft_mag_audio_lmr_buf,  BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
         fft_audio_lpr_buf,      BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
-        fft_mag_audio_lpr_buf,  BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT }
+        fft_mag_audio_lpr_buf,  BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
+        fft_pilot_buf,          BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
+        fft_mag_pilot_buf,      BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
+        fft_pll_pilot_buf,      BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT },
+        fft_mag_pll_pilot_buf,  BufferParameters{ (size_t)block_size_signal, SIMD_ALIGN_AMOUNT }
     );
     std::memset(aligned_block_buf.begin(), 0, aligned_block_buf.size());
 
@@ -111,7 +111,7 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
 
     // ds_signal -> [hilbert_transform] -> iq_signal
     {
-        const int N = 41;
+        const int N = filt_cfg.order_fir_hilbert;
         filt_hilbert_transform = std::make_unique<Hilbert_FIR_Filter>(N);
     }
 
@@ -166,10 +166,6 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     {
         const float Fs = (float)Fs_signal;
         const float Fc = (float)params.F_pilot;
-        // const float k = Fc/(Fs/2.0f);
-        // const float r = 0.99f; 
-        // auto* res = create_iir_peak_filter(k, r);
-        // filt_iir_peak_pilot = std::make_unique<IIR_Filter<std::complex<float>>>(res->b, res->a, res->N);
         const float B = (float)params.F_pilot_deviation;
         const float f1 = Fc-B;
         const float f2 = Fc+B;
@@ -179,6 +175,17 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         const int N = filt_cfg.order_fir_bpf_pilot;
         auto* res = create_fir_bpf(k1, k2, N-1);
         filt_fir_bpf_pilot = std::make_unique<FIR_Filter<std::complex<float>>>(res->b, res->N);
+        delete res;
+    }
+
+    // NOTE: Optional
+    {
+        const float Fs = (float)Fs_signal;
+        const float Fc = (float)params.F_pilot;
+        const float k = Fc/(Fs/2.0f);
+        const float r = 0.9999f;
+        auto* res = create_iir_peak_filter(k, r);
+        filt_iir_peak_pilot = std::make_unique<IIR_Filter<std::complex<float>>>(res->b, res->a, res->N);
         delete res;
     }
 
@@ -200,12 +207,13 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         pll_mixer.f_center = -(float)params.F_pilot; 
         pll_mixer.f_gain = -(float)params.F_pilot_deviation;
         pll_mixer.integrator.KTs = Ts;
+        // PI controller 
         pll_prev_phase_error = 0.0f;
-        // PI controller - integrator component
         integrator_pll_phase_error.KTs = filt_cfg.pll.integrator_gain*Ts;
     }
 
     // 4. RDS synchronisation
+
     // rds_buf -> [poly_ds_lpf] -> ds_rds_buf
     if (Fs_rds != Fs_ds_rds) {
         const float Fs = (float)Fs_rds;
@@ -219,64 +227,40 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         delete res;
     }
 
-    // RDS TED loop filter
     {
-        const float Fs = (float)Fs_ds_rds;
-        const float Fc = (float)params.F_rds_bandwidth;
-        const float k = Fc/(Fs/2.0f);
-        auto* res = create_iir_single_pole_lpf(k);
-        filt_iir_lpf_ted_phase_error = std::make_unique<IIR_Filter<float>>(res->b, res->a, res->N);
-        delete res;
-    }
-
-    // Setup control loop for RDS symbol synchronisation
-    {
-        const int Fs = Fs_ds_rds;
-        const float Ts = 1.0f/(float)Fs;
-        const int Fsymbol = params.F_rds_bandwidth;
-        const int samples_per_symbol = Fs_ds_rds/params.F_rds_bandwidth;
-        const int zcd_cooldown = samples_per_symbol/2;
+        bpsk_sync = std::make_unique<BPSK_Synchroniser>(block_size_ds_rds);
 
         // AGC so our constellation has normalised points
         // Points: [(0-1j), (0+1j)]
-        agc_rds.target_power = 0.5f;
+        const auto& cfg = bpsk_sync->GetConfig();
+        agc_rds.target_power = cfg.agc_target_power;
 
-        // Stop the zero crossing detector from triggering too often
-        trigger_cooldown_rds_zcd.N_cooldown = zcd_cooldown;
-
-        // Voltage controlled timing clock for triggering the integrate and dump filter
-        ted_rds_int_dump_trig.integrator.KTs = Ts;
-        ted_rds_int_dump_trig.fcenter = (float)Fsymbol;
-        ted_rds_int_dump_trig.fgain = (float)Fsymbol;
-
-        // PI controller which takes newest phase error and outputs a control signal
-        // to the voltage controlled timing clock
-        ted_prev_phase_error = 0.0f;
-        integrator_ted_phase_error.KTs = filt_cfg.rds_ted.integrator_gain*Ts;
-
-        // Integrate and dump filter for filtering and acquiring symbols
-        // The area under a triangle is given by A = 1/2 * bh
-        // b = samples_per_symbol
-        // h = 1.0f (normalised bpsk signal)
-        const float A = 0.5f * (float)samples_per_symbol * 1.0f;
-        rds_int_dump_filter.KTs = 1.0f/A;
-        rds_int_dump_filter.yn = 0.0f;
-
-        // Phase correction
-        // NOTE: The frequency correction using the 3rd harmonic of the pilot tone
-        //       gives us good frequency synchronisation but we may still end up with a phase error
-        //       Thus we also add in a mechanism to correct for the phase
-        integrator_rds_phase_error.KTs = 100.0f*Ts;
-        integrator_rds_phase_error.yn = 0.0f;
+        rds_total_symbols = 0;
     }
 
+
     // 5. Audio framing
+    // NOTE: Optional filter
+    // audio_lmr_buf -> [fir_lpf] -> audio_lmr_buf
+    {
+        const float R = filt_cfg.fir_lpf_lmr_denoise_factor;
+        const float Fs = (float)Fs_signal;
+        const float Fc = (float)params.F_audio_lmr_bandwidth * R;
+        const float k = Fc/(Fs/2.0f);
+        const int N = filt_cfg.order_fir_lpf_lmr_denoise;
+        auto* res = create_fir_lpf(k, N-1);
+        filt_fir_lpf_lmr_denoise = std::make_unique<FIR_Filter<std::complex<float>>>(res->b, N);
+        delete res;
+
+        // TODO: Add a delay line to match the L+R component to the L-R filtered component
+    }
+
     // audio_mixer -> [pilot_tone_notch_filter] -> audio_mixer 
     {
         const float Fs = (float)Fs_signal;
         const float Fc = (float)params.F_pilot;
         const float k = Fc/(Fs/2.0f);
-        const float r = 0.99f;
+        const float r = 0.9999f;
         auto* res = create_iir_notch_filter(k, r);
         filt_iir_notch_pilot = std::make_unique<IIR_Filter<Frame<float>>>(res->b, res->a, res->N);
         delete res;
@@ -308,6 +292,10 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     calc_fft_mag_audio_lmr.GetAverageBeta() = 0.1f;
     calc_fft_mag_audio_lpr.SetMode(Calculate_FFT_Mag::Mode::AVERAGE);
     calc_fft_mag_audio_lpr.GetAverageBeta() = 0.1f;
+    calc_fft_mag_pilot.SetMode(Calculate_FFT_Mag::Mode::AVERAGE);
+    calc_fft_mag_pilot.GetAverageBeta() = 0.1f;
+    calc_fft_mag_pll_pilot.SetMode(Calculate_FFT_Mag::Mode::AVERAGE);
+    calc_fft_mag_pll_pilot.GetAverageBeta() = 0.1f;
 }
 
 Broadcast_FM_Demod::~Broadcast_FM_Demod() = default;
@@ -350,7 +338,7 @@ void Broadcast_FM_Demod::Process(tcb::span<const std::complex<float>> x)
 
     // Output demodulated data to listeners
     obs_on_audio_block.Notify(audio_stereo_out_buf, Fs_audio_stereo);
-    obs_on_rds_symbols.Notify(tx_rds_symbols);
+    obs_on_rds_symbols.Notify(rds_pred_sym_buf.first(rds_total_symbols));
 }
 
 void Broadcast_FM_Demod::Run_FM_Demodulate(tcb::span<const std::complex<float>> x) {
@@ -382,25 +370,31 @@ void Broadcast_FM_Demod::FilterSubComponents() {
     filt_fir_bpf_audio_lmr->process(iq_signal_buf.data(), audio_lmr_buf.data(), (int)audio_lmr_buf.size());
     // iq_signal -> [fir_bpf] -> rds
     filt_fir_bpf_rds->process(iq_signal_buf.data(), rds_buf.data(), (int)rds_buf.size());
-    // iq_signal -> [iir_peak] -> pilot
-    filt_fir_bpf_pilot->process(iq_signal_buf.data(), pilot_buf.data(), (int)pilot_buf.size());
 
     // Extract pilot tone and normalise to 1 Watt
-    // pilot -> [agc] -> pilot
-    agc_pilot.process(pilot_buf.data(), pilot_buf.data(), (int)pilot_buf.size());
+    if (controls.is_pilot_tone_peak_filter) {
+        // iq_signal -> [iir_peak] -> pilot
+        // NOTE: Run it through multiple times just to be sure
+        filt_iir_peak_pilot->process(iq_signal_buf.data(), pilot_buf.data(), (int)pilot_buf.size());
+    } else {
+        // iq_signal -> [fir_bpf] -> pilot
+        filt_fir_bpf_pilot->process(iq_signal_buf.data(), pilot_buf.data(), (int)pilot_buf.size());
+    }
 }
 
 void Broadcast_FM_Demod::ApplyPLL() {
+    // Guarantee that the pilot signal has the correct power
+    // pilot -> [agc] -> pilot
+    agc_pilot.process(pilot_buf.data(), pilot_buf.data(), (int)pilot_buf.size());
+
     // Run our PLL loop
     const size_t N = pilot_buf.size();
     for (size_t i = 0; i < N; i++) {
-        // Update phase error
+        // Update phase error with PI controller
         float pll_phase_error_lpf = 0.0f;
         filt_iir_lpf_pll_phase_error->process(&pll_prev_phase_error, &pll_phase_error_lpf, 1);
-        // Integrate error
         integrator_pll_phase_error.process(pll_prev_phase_error);
         integrator_pll_phase_error.yn = clamp(integrator_pll_phase_error.yn, -1.0f, 1.0f);
-        // PI controller 
         const float PI_error = 
             pll_phase_error_lpf*filt_cfg.pll.proportional_gain + 
             integrator_pll_phase_error.yn;
@@ -447,93 +441,30 @@ void Broadcast_FM_Demod::SynchroniseRDS() {
         std::copy_n(rds_buf.data(), rds_buf.size(), rds_ds_buf.data());
     }
 
-    // ds_rds -> [agc] -> ds_rds
     agc_rds.process(rds_ds_buf.data(), rds_ds_buf.data(), (int)rds_ds_buf.size());
+    rds_total_symbols = bpsk_sync->Process(rds_ds_buf, rds_raw_sym_buf);
 
-    // NOTE: We are targeting a BPSK constellation that lies on the imaginary axis
-    // Symbol acquisition loop
-    int rds_total_symbols = 0;
-    for (size_t i = 0, N = rds_ds_buf.size(); i < N; i++) {
-        // Phase correction vector
-        // pll = exp(j*theta)
-        // v0 = exp(j*phi)
-        // v1 = v0 * pll = exp(j*(theta+phi))
-        const float phase_offset = integrator_rds_phase_error.yn;
-        const auto pll = std::complex<float>(std::cos(phase_offset), std::sin(phase_offset));
-        rds_ds_buf[i] *= pll;
-        const auto IQ = rds_ds_buf[i];
-
-        // IQ zero crossing detector on imaginary component
-        bool is_zcd = zcd_rds.process(IQ.imag());
-        is_zcd = trigger_cooldown_rds_zcd.on_trigger(is_zcd);
-
-        // Update TED phase error
-        if (is_zcd) {
-            ted_prev_phase_error = ted_rds_int_dump_trig.get_timing_error();
-        }
-
-        // Propagate TED error into PLL
-        float ted_phase_error_lpf = 0.0f;
-        filt_iir_lpf_ted_phase_error->process(&ted_prev_phase_error, &ted_phase_error_lpf, 1);
-        // Integrate error
-        integrator_ted_phase_error.process(ted_prev_phase_error);
-        integrator_ted_phase_error.yn = clamp(integrator_ted_phase_error.yn, -1.0f, 1.0f);
-        // PI controller
-        const float PI_error = 
-            filt_cfg.rds_ted.proportional_gain*ted_phase_error_lpf +
-            integrator_ted_phase_error.yn;
-        ted_rds_int_dump_trig.phase_error = -PI_error;
-
-        // Update integrate and dump filter
-        rds_int_dump_filter.process(IQ);
-
-        // Trigger the integrate and dump filter
-        const bool is_ted = ted_rds_int_dump_trig.update();
-        if (is_ted) {
-            // Dump the integrator output
-            const auto raw_sym = rds_int_dump_filter.yn;
-            rds_int_dump_filter.yn = {0.0f, 0.0f};
-
-            // BPSK symbols should only have a imaginary component
-            const float sym_phase = std::atan2(raw_sym.imag(), raw_sym.real());
-            const auto sym = clamp(raw_sym.imag(), -1.0f, 1.0f);
-
-            // Estimate phase error based off known constellation
-            // constellation = [(0-1j), (0+1j)]
-            // error = [-pi/2, pi/2]
-            const float MAX_PHASE_ERROR = (float)M_PI/2.0f;
-            const float estimated_phase_error = 
-                (sym_phase > 0.0f) ? 
-                (+(float)M_PI/2.0f - sym_phase) :  // +pi/2
-                (-(float)M_PI/2.0f - sym_phase);   // -pi/2
-
-            integrator_rds_phase_error.process(estimated_phase_error);
-            integrator_rds_phase_error.yn = clamp(integrator_rds_phase_error.yn, -MAX_PHASE_ERROR, MAX_PHASE_ERROR);
-
-            rds_bpsk_symbols[rds_total_symbols] = sym;
-            rds_bpsk_raw_symbols[rds_total_symbols] = raw_sym;
-            rds_total_symbols++;
-        }
-
-        rds_zcd[i] = is_zcd;
-        rds_int_dump_trigger[i] = is_ted;
-        rds_ted_raw_phase_error[i] = ted_prev_phase_error;
-        rds_ted_lpf_phase_error[i] = PI_error;
-        rds_int_dump_filter_buf[i] = rds_int_dump_filter.yn;
-        rds_pll_phase_error[i] = integrator_rds_phase_error.yn;
+    for (int i = 0; i < rds_total_symbols; i++) {
+        // Output symbols are aligned to the imaginary axis
+        const float v = rds_raw_sym_buf[i].imag();
+        rds_pred_sym_buf[i] = clamp(v, -1.0f, 1.0f);
     }
-
-    // Update our list of extracted RDS symbols
-    tx_rds_symbols = rds_bpsk_symbols.first(rds_total_symbols);
-    tx_rds_raw_symbols = rds_bpsk_raw_symbols.first(rds_total_symbols);
 }
 
 void Broadcast_FM_Demod::CombineAudio() {
+    using AudioOut = Broadcast_FM_Demod_Controls::AudioOut;
+
+    // Optional L-R denoiser
+    if (controls.is_lmr_lpf && (controls.audio_out != AudioOut::LPR)) {
+        filt_fir_lpf_lmr_denoise->process(audio_lmr_buf.data(), audio_lmr_buf.data(), (int)audio_lmr_buf.size());
+    }
+
     // NOTE: The LMR stereo data seems to be on the quadrature component
     // audio_lmr + audio_lpr -> audio_mixer
+    const size_t N = audio_stereo_mixer_buf.size();
     switch (controls.audio_out) {
-    case Broadcast_FM_Demod_Controls::AudioOut::STEREO:
-        for (size_t i = 0, N = audio_stereo_mixer_buf.size(); i < N; i++) {
+    case AudioOut::STEREO:
+        for (size_t i = 0; i < N; i++) {
             const auto lpr = audio_lpr_buf[i].real();
             const auto lmr = audio_lmr_buf[i].imag();
             const float k = controls.audio_stereo_mix_factor;
@@ -543,14 +474,14 @@ void Broadcast_FM_Demod::CombineAudio() {
             };
         }
         break;
-    case Broadcast_FM_Demod_Controls::AudioOut::LMR:
-        for (size_t i = 0, N = audio_stereo_mixer_buf.size(); i < N; i++) {
+    case AudioOut::LMR:
+        for (size_t i = 0; i < N; i++) {
             const auto lmr = audio_lmr_buf[i].imag();
             audio_stereo_mixer_buf[i] = {lmr, lmr};
         }
         break;
-    case Broadcast_FM_Demod_Controls::AudioOut::LPR:
-        for (size_t i = 0, N = audio_stereo_mixer_buf.size(); i < N; i++) {
+    case AudioOut::LPR:
+        for (size_t i = 0; i < N; i++) {
             const auto lpr = audio_lpr_buf[i].real();
             audio_stereo_mixer_buf[i] = {lpr, lpr};
         }
@@ -558,7 +489,7 @@ void Broadcast_FM_Demod::CombineAudio() {
     }
 
     // Correct for gain loss due to previous processing
-    for (size_t i = 0, N = audio_stereo_mixer_buf.size(); i < N; i++) {
+    for (size_t i = 0; i < N; i++) {
         audio_stereo_mixer_buf[i] *= 2.0f;
     }
 
@@ -598,4 +529,12 @@ void Broadcast_FM_Demod::UpdateFFTs(tcb::span<const std::complex<float>> x) {
     CalculateFFT(audio_lpr_buf, fft_audio_lpr_buf);
     InplaceFFTShift(fft_audio_lpr_buf);
     calc_fft_mag_audio_lpr.Process(fft_audio_lpr_buf, fft_mag_audio_lpr_buf);
+
+    CalculateFFT(pilot_buf, fft_pilot_buf);
+    InplaceFFTShift(fft_pilot_buf);
+    calc_fft_mag_pilot.Process(fft_pilot_buf, fft_mag_pilot_buf);
+
+    CalculateFFT(pll_buf, fft_pll_pilot_buf);
+    InplaceFFTShift(fft_pll_pilot_buf);
+    calc_fft_mag_pll_pilot.Process(fft_pll_pilot_buf, fft_mag_pll_pilot_buf);
 }

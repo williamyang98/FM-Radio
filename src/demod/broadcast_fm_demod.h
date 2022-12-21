@@ -10,14 +10,14 @@
 
 #include "demod/fm_demod.h"
 #include "demod/pll_mixer.h"
-#include "demod/zero_crossing_detector.h"
-#include "demod/trigger_cooldown.h"
-#include "demod/ted_clock.h"
 
 #include "audio/frame.h"
 
 #include "utility/joint_allocate.h"
 #include "utility/observable.h"
+
+// Forward declare
+class BPSK_Synchroniser;
 
 // Parameters of the analogue transmission
 // NOTE: We rely on the pilot signal being the fundemental of the harmonic subcarriers
@@ -35,17 +35,18 @@ struct Broadcast_FM_Demod_Analog_Parameters {
 struct Broadcast_FM_Demod_Config {
     int order_poly_ds_lpf_baseband = 32;
     int order_poly_ds_lpf_signal = 32;
-    int order_fir_bpf_pilot = 64;       // NOTE: This also sets the LMR and RDS bpf orders
+    int order_fir_hilbert = 41;         // NOTE: This should be an ODD number for symmetry
+    int order_fir_bpf_pilot = 64;       // NOTE: If we are using the BPF for the pilot it 
+    int order_fir_lpf_audio_lpr = 64;   //       should have same delay as L+R and L-R
+    int order_fir_bpf_audio_lmr = 64; 
+    int order_fir_lpf_lmr_denoise = 64;
     int order_poly_ds_lpf_rds = 16;
     int order_poly_ds_lpf_audio = 32;
+    float fir_lpf_lmr_denoise_factor = 0.2f; // Amount of bandwidth of L-R to pass
     struct {
-        float integrator_gain = 1.0f;
-        float proportional_gain = 0.1f;
+        float integrator_gain = 0.1f;
+        float proportional_gain = 0.01f;
     } pll;
-    struct {
-        float integrator_gain = 1.0f;
-        float proportional_gain = 0.1f;
-    } rds_ted;
 };
 
 struct Broadcast_FM_Demod_Controls {
@@ -54,6 +55,14 @@ struct Broadcast_FM_Demod_Controls {
     // NOTE: Control how much the L-R gets mixed into L+R
     //       By default we set this abit low since the stereo data can be abit noisy
     float audio_stereo_mix_factor = 0.5f;
+    // NOTE: Higher frequency components in FM are more susceptible to noise
+    //       This means the L-R component is quite abit noisier than our L+R component
+    //       This is a flag to optionally enable a LPF
+    bool is_lmr_lpf = false;
+    // NOTE: Change between FIR bpf or IIR peak filter for getting pilot tone
+    // NOTE: Using the peak filter means some unknown phase shift in the pilot
+    //       This causes the stereo L-R data to be out of phase
+    bool is_pilot_tone_peak_filter = false;
 };
 
 class Broadcast_FM_Demod 
@@ -118,25 +127,22 @@ private:
     std::unique_ptr<FIR_Filter<std::complex<float>>> filt_fir_lpf_audio_lpr;
     std::unique_ptr<FIR_Filter<std::complex<float>>> filt_fir_bpf_audio_lmr;
     std::unique_ptr<FIR_Filter<std::complex<float>>> filt_fir_bpf_pilot;
+    std::unique_ptr<IIR_Filter<std::complex<float>>> filt_iir_peak_pilot;   // NOTE: We use either the fir_bpf or iir_peak filter
     std::unique_ptr<FIR_Filter<std::complex<float>>> filt_fir_bpf_rds;
-    AGC_Filter<std::complex<float>> agc_pilot;
-    AGC_Filter<std::complex<float>> agc_rds;
     // 3. PLL
+    AGC_Filter<std::complex<float>> agc_pilot;
     std::unique_ptr<IIR_Filter<float>> filt_iir_lpf_pll_phase_error;
     PLL_Mixer pll_mixer;
     Integrator_Block<float> integrator_pll_phase_error;
     float pll_prev_phase_error;
     // 4. RDS synchronisation
     std::unique_ptr<PolyphaseDownsampler<std::complex<float>>> filt_poly_lpf_ds_rds;
-    std::unique_ptr<IIR_Filter<float>> filt_iir_lpf_ted_phase_error;
-    Zero_Crossing_Detector zcd_rds;
-    Trigger_Cooldown trigger_cooldown_rds_zcd;
-    TED_Clock ted_rds_int_dump_trig;
-    Integrator_Block<float> integrator_ted_phase_error;
-    Integrator_Block<std::complex<float>> rds_int_dump_filter;
-    float ted_prev_phase_error;
-    Integrator_Block<float> integrator_rds_phase_error;
+    AGC_Filter<std::complex<float>> agc_rds;
+    std::unique_ptr<BPSK_Synchroniser> bpsk_sync;
+    int rds_total_symbols;
     // 5. Audio framing
+    // TODO: Change this to a single channel filter
+    std::unique_ptr<FIR_Filter<std::complex<float>>> filt_fir_lpf_lmr_denoise;
     std::unique_ptr<IIR_Filter<Frame<float>>> filt_iir_notch_pilot;
     std::unique_ptr<PolyphaseDownsampler<Frame<float>>> filt_poly_lpf_ds_audio_stereo;
 
@@ -158,14 +164,8 @@ private:
     tcb::span<float> pll_raw_phase_error;
     // 4. RDS synchronisation
     tcb::span<std::complex<float>> rds_ds_buf;
-    tcb::span<bool> rds_zcd;
-    tcb::span<bool> rds_int_dump_trigger;
-    tcb::span<float> rds_ted_raw_phase_error;
-    tcb::span<float> rds_ted_lpf_phase_error;
-    tcb::span<float> rds_pll_phase_error;
-    tcb::span<std::complex<float>> rds_int_dump_filter_buf;
-    tcb::span<std::complex<float>> rds_bpsk_raw_symbols;
-    tcb::span<float> rds_bpsk_symbols;
+    tcb::span<std::complex<float>> rds_raw_sym_buf;
+    tcb::span<float> rds_pred_sym_buf;
     // 5. Audio framing
     tcb::span<Frame<float>> audio_stereo_mixer_buf;
     tcb::span<Frame<float>> audio_stereo_out_buf;
@@ -182,12 +182,11 @@ private:
     tcb::span<float> fft_mag_audio_lmr_buf;
     tcb::span<std::complex<float>> fft_audio_lpr_buf;
     tcb::span<float> fft_mag_audio_lpr_buf;
+    tcb::span<std::complex<float>> fft_pilot_buf;
+    tcb::span<float> fft_mag_pilot_buf;
+    tcb::span<std::complex<float>> fft_pll_pilot_buf;
+    tcb::span<float> fft_mag_pll_pilot_buf;
 
-    // NOTE: This is not allocated as part of the joint block buffer
-    //       It is instead a subspan of rds_bpsk_symbols which only contains
-    //       the symbols demodulated in this frame
-    tcb::span<float> tx_rds_symbols;
-    tcb::span<std::complex<float>> tx_rds_raw_symbols;
 
     Calculate_FFT_Mag calc_fft_mag_baseband;
     Calculate_FFT_Mag calc_fft_mag_ds_baseband;
@@ -195,6 +194,8 @@ private:
     Calculate_FFT_Mag calc_fft_mag_rds;
     Calculate_FFT_Mag calc_fft_mag_audio_lmr;
     Calculate_FFT_Mag calc_fft_mag_audio_lpr;
+    Calculate_FFT_Mag calc_fft_mag_pilot;
+    Calculate_FFT_Mag calc_fft_mag_pll_pilot;
 
     // audio_stereo_buf, sample_rate
     Observable<tcb::span<const Frame<float>>, int> obs_on_audio_block;
@@ -224,14 +225,9 @@ public:
     tcb::span<const float> Get_PLL_LPF_Phase_Error_Output() const { return pll_lpf_phase_error; }
     // RDS synchronisation
     tcb::span<const std::complex<float>> Get_RDS_Downsampled_Output() const { return rds_ds_buf; }
-    tcb::span<const bool> Get_RDS_Zero_Crossing() const { return rds_zcd; }
-    tcb::span<const bool> Get_RDS_Trig_Dump() const { return rds_int_dump_trigger; }
-    tcb::span<const float> Get_RDS_Raw_Phase_Error() const { return rds_ted_raw_phase_error; }
-    tcb::span<const float> Get_RDS_LPF_Phase_Error() const { return rds_ted_lpf_phase_error; }
-    tcb::span<const std::complex<float>> Get_RDS_Int_Dump_Filter() const { return rds_int_dump_filter_buf; }
-    tcb::span<const float> Get_RDS_PLL_Phase_Error() const { return rds_pll_phase_error; }
-    tcb::span<const float> Get_TX_RDS_Symbols() const { return tx_rds_symbols; }
-    tcb::span<const std::complex<float>> Get_TX_RDS_Raw_Symbols() const { return tx_rds_raw_symbols; }
+    tcb::span<const float> GetRDSPredSymbols() const { return rds_pred_sym_buf.first(rds_total_symbols); }
+    tcb::span<const std::complex<float>> GetRDSRawSymbols() const { return rds_raw_sym_buf.first(rds_total_symbols); }
+    auto& GetBPSKSync() { return *(bpsk_sync.get()); }
     // Audio framing
     tcb::span<const Frame<float>> GetStereoOut() const { return audio_stereo_out_buf; }
     // FFT
@@ -241,12 +237,16 @@ public:
     tcb::span<const float> GetRDSMagnitudeSpectrum() const { return fft_mag_rds_buf; }
     tcb::span<const float> GetAudioLMRMagnitudeSpectrum() const { return fft_mag_audio_lmr_buf; }
     tcb::span<const float> GetAudioLPRMagnitudeSpectrum() const { return fft_mag_audio_lpr_buf; }
+    tcb::span<const float> GetPilotMagnitudeSpectrum() const { return fft_mag_pilot_buf; }
+    tcb::span<const float> GetPLLPilotMagnitudeSpectrum() const { return fft_mag_pll_pilot_buf; }
     auto& GetBasebandMagnitudeSpectrumControls() { return calc_fft_mag_baseband; }
     auto& GetDownsampledBasebandMagnitudeSpectrumControls() { return calc_fft_mag_ds_baseband; }
     auto& GetSignalMagnitudeSpectrumControls() { return calc_fft_mag_signal; }
     auto& GetRDSMagnitudeSpectrumControls() { return calc_fft_mag_rds; }
     auto& GetAudioLMRMagnitudeSpectrumControls() { return calc_fft_mag_audio_lmr; }
     auto& GetAudioLPRMagnitudeSpectrumControls() { return calc_fft_mag_audio_lpr; }
+    auto& GetPilotMagnitudeSpectrumControls() { return calc_fft_mag_pilot; }
+    auto& GetPLLPilotMagnitudeSpectrumControls() { return calc_fft_mag_pll_pilot; }
 
     auto GetBasebandSampleRate() const { return Fs_baseband; }
     auto GetDownsampledBasebandSampleRate() const { return Fs_ds_baseband; }
