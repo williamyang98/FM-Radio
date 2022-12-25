@@ -1,5 +1,7 @@
 #include "app.h"
 #include "demod/broadcast_fm_demod.h"
+#include "rds_decoder/rds_init.h"
+#include "rds_decoder/differential_manchester_decoder.h"
 
 constexpr size_t SIMD_ALIGN_AMOUNT = 32;
 
@@ -9,11 +11,14 @@ App::App(FILE* _fp_in, FILE* _fp_out, const int _block_size)
     is_running = false;
 
     aligned_block_buf = AllocateJoint(
-        data_u8_buf,    BufferParameters{ (size_t)block_size },
-        data_f32_buf,   BufferParameters{ (size_t)block_size, SIMD_ALIGN_AMOUNT }\
+        data_u8_buf,            BufferParameters{ (size_t)block_size },
+        data_f32_buf,           BufferParameters{ (size_t)block_size, SIMD_ALIGN_AMOUNT },
+        rds_bytes_decode_buf,   BufferParameters{ (size_t)16 }
     );
 
     broadcast_fm_demod = std::make_unique<Broadcast_FM_Demod>(block_size);
+    differential_manchester_decoder = std::make_unique<DifferentialManchesterDecoder>(rds_bytes_decode_buf);
+    rds_decoding_chain = std::make_unique<RDS_Decoding_Chain>();
 
     {
         auto& mixer = pa_output.GetMixer();
@@ -36,7 +41,14 @@ App::App(FILE* _fp_in, FILE* _fp_out, const int _block_size)
     });
      
     broadcast_fm_demod->OnRDSOut().Attach([this](tcb::span<const float> x) {
-        // TODO:
+        differential_manchester_decoder->Process(x);
+        // if (fp_out != NULL) {
+        //     fwrite(x.data(), sizeof(float), x.size(), fp_out);
+        // }
+    });
+
+    differential_manchester_decoder->OnRDSBytes().Attach([this](tcb::span<const uint8_t> x) {
+        rds_decoding_chain->Process(x);
     });
 }
 
@@ -79,3 +91,6 @@ void App::Process() {
     is_running = false;
 }
     
+RDS_Database& App::GetRDSDatabase() {
+    return rds_decoding_chain->db;
+}

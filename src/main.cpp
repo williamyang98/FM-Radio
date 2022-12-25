@@ -15,10 +15,10 @@
 #include <imgui.h>
 #include "gui/imgui_skeleton.h"
 #include "gui/font_awesome_definitions.h"
-#include "utility/getopt/getopt.h"
+#include "gui/render_app.h"
 
 #include "app.h"
-#include "render_app.h"
+#include "utility/getopt/getopt.h"
 
 class Renderer: public ImguiSkeleton
 {

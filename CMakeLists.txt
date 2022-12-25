@@ -73,6 +73,14 @@ set_target_properties(demod_lib PROPERTIES CXX_STANDARD 17)
 target_include_directories(demod_lib PRIVATE ${DEMOD_LIB} ${SRC_DIR})
 target_link_libraries(demod_lib PRIVATE dsp_lib)
 
+set(RDS_DIR ${SRC_DIR}/rds_decoder)
+add_library(rds_lib STATIC
+    ${RDS_DIR}/rds_group_sync.cpp
+    ${RDS_DIR}/rds_decoder.cpp
+    ${RDS_DIR}/rds_database_decoder_handler.cpp)
+set_target_properties(rds_lib PROPERTIES CXX_STANDARD 17)
+target_include_directories(rds_lib PRIVATE ${RDS_DIR} ${SRC_DIR})
+
 set(AUDIO_DIR ${SRC_DIR}/audio)
 add_library(audio_lib STATIC 
     ${AUDIO_DIR}/resampled_pcm_player.cpp
@@ -87,19 +95,32 @@ set(GETOPT_DIR ${SRC_DIR}/utility/getopt)
 add_library(getopt STATIC ${GETOPT_DIR}/getopt.c)
 target_include_directories(getopt PRIVATE ${GETOPT_DIR})
 
+set(GUI_DIR ${SRC_DIR}/gui)
+add_library(gui_lib STATIC
+    ${GUI_DIR}/imgui_skeleton.cpp
+    ${GUI_DIR}/imgui_extensions.cpp
+    ${GUI_DIR}/render_app.cpp
+    ${GUI_DIR}/render_portaudio_controls.cpp
+    ${GUI_DIR}/render_fm_demod.cpp
+    ${GUI_DIR}/render_bpsk_sync.cpp
+    ${GUI_DIR}/render_rds_database.cpp)
+set_target_properties(gui_lib PROPERTIES CXX_STANDARD 17)
+target_include_directories(gui_lib PRIVATE ${GUI_DIR} ${SRC_DIR})
+target_link_libraries(gui_lib PRIVATE 
+    imgui implot
+    audio_lib demod_lib rds_lib
+    getopt fmt
+    ${EXTRA_LIBS})
+
 # Our application
 add_executable(main 
     ${SRC_DIR}/main.cpp 
-    ${SRC_DIR}/gui/imgui_skeleton.cpp
-    ${SRC_DIR}/app.cpp
-    ${SRC_DIR}/render_app.cpp
-    ${SRC_DIR}/gui/render_portaudio_controls.cpp
-)
+    ${SRC_DIR}/app.cpp)
 target_include_directories(main PRIVATE ${SRC_DIR})
 set_target_properties(main PROPERTIES CXX_STANDARD 17)
 target_link_libraries(main PRIVATE 
-    imgui implot
-    ${RTLSDR_LIBS} ${FFTW3_LIBS} audio_lib dsp_lib demod_lib
+    imgui implot gui_lib
+    ${RTLSDR_LIBS} ${FFTW3_LIBS} audio_lib dsp_lib demod_lib rds_lib
     getopt fmt
     ${EXTRA_LIBS})
 
@@ -117,6 +138,8 @@ endif()
 
 if(MSVC)
 target_compile_options(getopt       PRIVATE "/MP")
+target_compile_options(demod_lib    PRIVATE "/MP")
+target_compile_options(rds_lib      PRIVATE "/MP")
 target_compile_options(audio_lib    PRIVATE "/MP")
 target_compile_options(main         PRIVATE "/MP")
 endif()

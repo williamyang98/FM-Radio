@@ -1,15 +1,14 @@
-#include "render_app.h"
-#include "app.h"
+#include "render_fm_demod.h"
 
-#include <imgui.h>
-#include <implot.h>
-#include "gui/render_portaudio_controls.h"
 #include "demod/broadcast_fm_demod.h"
-#include "demod/bpsk_synchroniser.h"
 #include "dsp/calculate_fft_mag.h"
 #include <fmt/core.h>
 
-void Render_FM_Demod(Broadcast_FM_Demod& demod);
+#include <imgui.h>
+#include <implot.h>
+#include "render_util.h"
+#include "render_bpsk_sync.h"
+
 void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls);
 void Render_FM_Demod_Other_Plots(Broadcast_FM_Demod& demod);
 void Render_FM_Demod_Audio_Plots(Broadcast_FM_Demod& demod);
@@ -21,67 +20,13 @@ void Render_Magnitude_Spectrum_Controls(Calculate_FFT_Mag& calc);
 // Custom plot for rendering magnitude spectrum of FM demodulator output signal
 void Render_FM_Demod_Magnitude_Spectrum(tcb::span<const float> x, const float Fs, const Broadcast_FM_Demod_Analog_Parameters& config, const ImPlotRange range, const char* label);
 
-void Render_BPSK_Sync(BPSK_Synchroniser& sync);
-
-void PlotComplexLine(const char *label, const std::complex<float>* x, const int N) {
-    auto* x0 = reinterpret_cast<const float*>(x);
-    auto I_label = fmt::format("{:s} (I)", label);
-    auto Q_label = fmt::format("{:s} (Q)", label);
-    ImPlot::PlotLine(I_label.c_str(), &x0[0], N, 1, 0, 0, 0, sizeof(std::complex<float>));
-    ImPlot::PlotLine(Q_label.c_str(), &x0[1], N, 1, 0, 0, 0, sizeof(std::complex<float>));
-}
-
 // Stereo frame data
-void PlotFrameLine(const char *label, const Frame<float>* x, const int N) {
+static void PlotFrameLine(const char *label, const Frame<float>* x, const int N) {
     auto* x0 = reinterpret_cast<const float*>(x);
     auto L_label = fmt::format("{:s} (L)", label);
     auto R_label = fmt::format("{:s} (R)", label);
     ImPlot::PlotLine(L_label.c_str(), &x0[0], N, 1, 0, 0, 0, sizeof(std::complex<float>));
     ImPlot::PlotLine(R_label.c_str(), &x0[1], N, 1, 0, 0, 0, sizeof(std::complex<float>));
-}
-
-void PlotConstellationSubplot(tcb::span<const std::complex<float>> x, const char* label, const double A=4) {
-    const int TOTAL_ROWS = 1;
-    const int TOTAL_COLS = 2;
-    static double y_min = -A;
-    static double y_max = A;
-
-    auto* buf = reinterpret_cast<const float*>(x.data());
-    const int N = (int)x.size();
-
-    if (ImPlot::BeginSubplots(label, TOTAL_ROWS, TOTAL_COLS, ImVec2(-1,-1))) {
-        if (ImPlot::BeginPlot("Constellation", ImVec2(-1,0), ImPlotFlags_Equal)) {
-            ImPlot::SetupAxisLimits(ImAxis_X1, -A, A, ImPlotCond_Once);
-            ImPlot::SetupAxisLimits(ImAxis_Y1, -A, A, ImPlotCond_Once);
-            ImPlot::SetupAxisLinks(ImAxis_Y1, &y_min, &y_max);
-            const float marker_size = 2.0f;
-            ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross, marker_size);
-            ImPlot::PlotScatter("IQ", &buf[0], &buf[1], N, 0, 0, sizeof(std::complex<float>));
-            ImPlot::EndPlot();
-        }
-
-        if (ImPlot::BeginPlot("Time Plot")) {
-            ImPlot::SetupAxisLinks(ImAxis_Y1, &y_min, &y_max);
-            ImPlot::SetupAxis(ImAxis_X1, NULL, ImPlotAxisFlags_AutoFit);
-            ImPlot::PlotLine("I", &buf[0], N, 1, 0, 0, 0, sizeof(std::complex<float>));
-            ImPlot::PlotLine("Q", &buf[1], N, 1, 0, 0, 0, sizeof(std::complex<float>));
-            ImPlot::EndPlot();
-        }
-        ImPlot::EndSubplots();
-    }
-}
-
-void RenderApp(App& app) {
-    if (ImGui::Begin("Audio Controls")) {
-        auto& device_list = app.GetPortAudioDeviceList();
-        auto& audio_output = app.GetPortAudioOutput();
-        RenderPortAudioControls(device_list, audio_output);
-    }
-    ImGui::End();
-
-    ImGui::PushID("FM Demod GUI");
-    Render_FM_Demod(app.GetFMDemod());
-    ImGui::PopID();
 }
 
 void Render_FM_Demod(Broadcast_FM_Demod& demod) {
@@ -471,74 +416,6 @@ void Render_FM_Demod_Magnitude_Spectrum(tcb::span<const float> x, const float Fs
         ImPlot::DragLineX(line_id++, &Frds_upper, COL_BLUE, 1.0f, ImPlotDragToolFlags_NoInputs);
         ImPlot::EndPlot();
     }
-}
-
-void Render_BPSK_Sync(BPSK_Synchroniser& sync) {
-    if (ImGui::Begin("PLL Symbols")) {
-        PlotConstellationSubplot(sync.GetPLLSymbols(), "###PLL Symbols");
-    };
-    ImGui::End();
-
-    if (ImGui::Begin("Triggers")) {
-        if (ImPlot::BeginPlot("Triggers")) {
-            auto range = ImPlotRange(-0.5f, 1.5f);
-            auto x0 = sync.GetZeroCrossings();
-            auto x1 = sync.GetIntDumpTriggers();
-            auto label0 = "Zero Crossing Detector";
-            auto label1 = "Integrate & Dump";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            ImPlot::PlotStems(label0, reinterpret_cast<const uint8_t*>(x0.data()), (int)x0.size());
-            ImPlot::PlotStems(label1, reinterpret_cast<const uint8_t*>(x1.data()), (int)x1.size());
-            ImPlot::EndPlot();
-        }
-    };
-    ImGui::End();
-
-    if (ImGui::Begin("Timing Error Detector")) {
-        if (ImPlot::BeginPlot("Phase Error")) {
-            auto range = ImPlotRange(-1.5f, 1.5f);
-            auto x0 = sync.GetTEDRawPhaseError();
-            auto x1 = sync.GetTEDPIPhaseError();
-            auto label0 = "Raw";
-            auto label1 = "PI controller";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            ImPlot::PlotLine(label0, x0.data(), (int)x0.size());
-            ImPlot::PlotLine(label1, x1.data(), (int)x1.size());
-            ImPlot::EndPlot();
-        }
-    };
-    ImGui::End();
-
-    if (ImGui::Begin("Integrate & Dump Filter")) {
-        if (ImPlot::BeginPlot("Integrator & Dump Filter")) {
-            auto range = ImPlotRange(-1.5f, 1.5f);
-            auto x = sync.GetIntDumpFilter();
-            auto label = "Integrate & Dump";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
-            ImPlot::EndPlot();
-        }
-    };
-    ImGui::End();
-
-    if (ImGui::Begin("PLL##bpsk_plot")) {
-        if (ImPlot::BeginPlot("Phase Error")) {
-            auto range = ImPlotRange(-1.5f, 1.5f);
-            auto x0 = sync.GetPLLRawPhaseError();
-            auto x1 = sync.GetPLLPIPhaseError();
-            auto label0 = "Raw";
-            auto label1 = "PI controller";
-            ImPlot::SetupAxes("Sample", "Amplitude");
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            ImPlot::PlotLine(label0, x0.data(), (int)x0.size());
-            ImPlot::PlotLine(label1, x1.data(), (int)x1.size());
-            ImPlot::EndPlot();
-        }
-    };
-    ImGui::End();
 }
 
 void Render_FM_Demod_Other_Plots(Broadcast_FM_Demod& demod) {
