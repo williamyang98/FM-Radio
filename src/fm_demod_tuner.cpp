@@ -19,13 +19,20 @@
 
 #include "app.h"
 #include "utility/getopt/getopt.h"
+#include "device/device_selector.h"
+#include "gui/render_device_selector.h"
 
 class Renderer: public ImguiSkeleton
 {
 private:
     App& app;
+    DeviceSelector& device_selector;
 public:
-    Renderer(App& _app): app(_app) {}
+    Renderer(App& _app, DeviceSelector& _device_selector)
+    : app(_app), device_selector(_device_selector)
+    {
+
+    }
     virtual GLFWwindow* Create_GLFW_Window(void) {
         return glfwCreateWindow(
             1280, 720, 
@@ -52,6 +59,11 @@ public:
         if (ImGui::Begin("Our workspace")) {
             ImGui::DockSpace(ImGui::GetID("Our workspace"));
             RenderApp(app);
+
+            if (ImGui::Begin("Device Controls")) {
+                RenderDeviceSelector(device_selector);
+            } 
+            ImGui::End();
         }
         ImGui::End();
     }
@@ -64,8 +76,6 @@ public:
 void usage() {
     fprintf(stderr, 
         "main, simple sdr example\n\n"
-        "\t[-i input filename (default: None)]\n"
-        "\t    If no file is provided then stdin is used\n"
         "\t[-o output filename (default: None)]\n"
         "\t    If no file is provided then stdout is used\n"
         "\t[-b block size (default: 65536)]\n"
@@ -83,15 +93,11 @@ uint32_t power_ceil(uint32_t x) {
 
 int main(int argc, char** argv) {
     uint32_t block_size = 65536;
-    const char* rd_filename = NULL;
     const char* wr_filename = NULL;
 
     int opt; 
-    while ((opt = getopt_custom(argc, argv, "i:o:b:h")) != -1) {
+    while ((opt = getopt_custom(argc, argv, "o:b:h")) != -1) {
         switch (opt) {
-        case 'i':
-            rd_filename = optarg;
-            break;
         case 'o':
             wr_filename = optarg;
             break;
@@ -111,15 +117,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    FILE* fp_in = stdin;
-    if (rd_filename != NULL) {
-        fp_in = fopen(rd_filename, "rb");
-        if (fp_in == NULL) {
-            fprintf(stderr, "Failed to open file for reading\n");
-            return 1;
-        }
-    }
-
     FILE* fp_out = stdout;
     if (wr_filename != NULL) {
         fp_out = fopen(wr_filename, "wb+");
@@ -130,15 +127,34 @@ int main(int argc, char** argv) {
     }
 
 #ifdef _WIN32
-    _setmode(_fileno(fp_in), _O_BINARY);
     _setmode(_fileno(fp_out), _O_BINARY);
 #endif
 
+
     auto pa_handler = ScopedPaHandler();
     fprintf(stderr, "Using a block size of %u\n", block_size);
-    auto app = App(fp_in, fp_out, block_size);
-    auto renderer = Renderer(app);
-    app.Start();
+    auto app = App(block_size);
+    auto device_selector = DeviceSelector();
+    auto renderer = Renderer(app, device_selector);
+
+    device_selector.OnDeviceChange().Attach([&](Device* device) {
+        if (device == NULL) return;
+        device->OnData().Attach([&](tcb::span<const std::complex<uint8_t>> x) {
+            app.Process(x);
+        });
+        // ABC classic is our default frequency
+        device->SetCenterFrequency(96'900'000);
+        device->SetSamplingFrequency(1'024'000);
+    });
+
+    auto init_command_thread = std::thread([&device_selector]() {
+		device_selector.SearchDevices();
+		if (device_selector.GetDeviceList().size() > 0) {
+			device_selector.SelectDevice(0);
+		}
+	});
+
     const int rv = RenderImguiSkeleton(&renderer);
+
     return rv;
 }

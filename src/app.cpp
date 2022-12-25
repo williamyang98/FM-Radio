@@ -5,11 +5,10 @@
 
 constexpr size_t SIMD_ALIGN_AMOUNT = 32;
 
-App::App(FILE* _fp_in, FILE* _fp_out, const int _block_size)
-: fp_in(_fp_in), fp_out(_fp_out), block_size(_block_size) 
+App::App(const int _block_size)
+: block_size(_block_size),
+  input_buf(data_u8_buf) 
 {
-    is_running = false;
-
     aligned_block_buf = AllocateJoint(
         data_u8_buf,            BufferParameters{ (size_t)block_size },
         data_f32_buf,           BufferParameters{ (size_t)block_size, SIMD_ALIGN_AMOUNT },
@@ -19,6 +18,8 @@ App::App(FILE* _fp_in, FILE* _fp_out, const int _block_size)
     broadcast_fm_demod = std::make_unique<Broadcast_FM_Demod>(block_size);
     differential_manchester_decoder = std::make_unique<DifferentialManchesterDecoder>(rds_bytes_decode_buf);
     rds_decoding_chain = std::make_unique<RDS_Decoding_Chain>();
+
+    is_output_rds_signal = false;
 
     {
         auto& mixer = pa_output.GetMixer();
@@ -42,9 +43,9 @@ App::App(FILE* _fp_in, FILE* _fp_out, const int _block_size)
      
     broadcast_fm_demod->OnRDSOut().Attach([this](tcb::span<const float> x) {
         differential_manchester_decoder->Process(x);
-        // if (fp_out != NULL) {
-        //     fwrite(x.data(), sizeof(float), x.size(), fp_out);
-        // }
+        if (is_output_rds_signal) {
+            obs_on_rds_signal.Notify(x);
+        }
     });
 
     differential_manchester_decoder->OnRDSBytes().Attach([this](tcb::span<const uint8_t> x) {
@@ -52,45 +53,32 @@ App::App(FILE* _fp_in, FILE* _fp_out, const int _block_size)
     });
 }
 
-App::~App() {
-    Stop();
-}
+App::~App() = default;
 
-void App::Start() {
-    if (is_running) return;
-    is_running = true;
-    runner_thread = std::make_unique<std::thread>([this]() { Process(); });
-}
-
-void App::Stop() {
-    if (!is_running) return;
-    is_running = false;
-    fclose(fp_in);
-    if (runner_thread) {
-        runner_thread->join();
-    }
-}
-
-void App::Process() {
-    while (is_running) {
-        const size_t nb_read = fread(data_u8_buf.data(), sizeof(std::complex<uint8_t>), block_size, fp_in);
-        if (nb_read != block_size) {
-            fprintf(stderr, "Failed to read %zu/%zu bytes\n", nb_read, (size_t)block_size);
-            break;
+size_t App::Process(tcb::span<const std::complex<uint8_t>> x) {
+    const size_t N = x.size();
+    size_t nb_read = 0;
+    while (nb_read < N) {
+        nb_read += input_buf.ConsumeBuffer(x);
+        if (input_buf.IsFull()) {
+            Run();
+            input_buf.Reset();
         }
-
-        for (int i = 0; i < block_size; i++) {
-            data_f32_buf[i] = {
-                (float)data_u8_buf[i].real() - 127.0f,
-                (float)data_u8_buf[i].imag() - 127.0f,
-            };
-        }
-
-        broadcast_fm_demod->Process(data_f32_buf);
     }
-    is_running = false;
+    return nb_read;
 }
     
 RDS_Database& App::GetRDSDatabase() {
     return rds_decoding_chain->db;
+}
+
+void App::Run() {
+    for (int i = 0; i < block_size; i++) {
+        data_f32_buf[i] = {
+            (float)data_u8_buf[i].real() - 127.0f,
+            (float)data_u8_buf[i].imag() - 127.0f,
+        };
+    }
+
+    broadcast_fm_demod->Process(data_f32_buf);
 }

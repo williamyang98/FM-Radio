@@ -17,6 +17,11 @@ void RenderApp(App& app) {
     }
     ImGui::End();
 
+    if (ImGui::Begin("I/O Controls")) {
+        ImGui::Checkbox("Output RDS Signal", &(app.GetIsOutputRDSSignal()));
+    }
+    ImGui::End();
+
     ImGui::PushID("FM Demod GUI");
     Render_FM_Demod(app.GetFMDemod());
     ImGui::PopID();

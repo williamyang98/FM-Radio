@@ -109,28 +109,58 @@ target_include_directories(gui_lib PRIVATE ${GUI_DIR} ${SRC_DIR})
 target_link_libraries(gui_lib PRIVATE 
     imgui implot
     audio_lib demod_lib rds_lib
-    getopt fmt
-    ${EXTRA_LIBS})
+    getopt fmt)
+
+set(DEVICE_DIR ${SRC_DIR}/device)
+add_library(device_lib STATIC
+    ${DEVICE_DIR}/device.cpp
+    ${DEVICE_DIR}/device_selector.cpp)
+set_target_properties(device_lib PROPERTIES CXX_STANDARD 17)
+target_include_directories(device_lib PRIVATE ${DEVICE_DIR} ${SRC_DIR})
+target_link_libraries(device_lib PRIVATE ${RTLSDR_LIBS} fmt)
+
+set(DEVICE_GUI_DIR ${SRC_DIR}/gui)
+add_library(device_gui_lib STATIC
+    ${DEVICE_GUI_DIR}/render_device_selector.cpp)
+set_target_properties(device_gui_lib PROPERTIES CXX_STANDARD 17)
+target_include_directories(device_gui_lib PRIVATE ${DEVICE_GUI_DIR} ${SRC_DIR})
+target_link_libraries(device_gui_lib PRIVATE ${RTLSDR_LIBS} device_lib imgui fmt)
+
+set(APP_DIR ${SRC_DIR})
+add_library(app_lib STATIC
+    ${APP_DIR}/app.cpp)
+set_target_properties(app_lib PROPERTIES CXX_STANDARD 17)
+target_include_directories(app_lib PRIVATE ${APP_DIR} ${SRC_DIR})
+target_link_libraries(app_lib PRIVATE 
+    audio_lib dsp_lib demod_lib rds_lib 
+    ${PORTAUDIO_LIBS})
 
 # Our application
-add_executable(main 
-    ${SRC_DIR}/main.cpp 
-    ${SRC_DIR}/app.cpp)
-target_include_directories(main PRIVATE ${SRC_DIR})
-set_target_properties(main PROPERTIES CXX_STANDARD 17)
-target_link_libraries(main PRIVATE 
+add_executable(fm_demod ${SRC_DIR}/fm_demod.cpp)
+target_include_directories(fm_demod PRIVATE ${SRC_DIR})
+set_target_properties(fm_demod PROPERTIES CXX_STANDARD 17)
+target_link_libraries(fm_demod PRIVATE 
+    getopt
+    app_lib
     imgui implot gui_lib
-    ${RTLSDR_LIBS} ${FFTW3_LIBS} audio_lib dsp_lib demod_lib rds_lib
-    getopt fmt
     ${EXTRA_LIBS})
+
+add_executable(fm_demod_tuner ${SRC_DIR}/fm_demod_tuner.cpp)
+target_include_directories(fm_demod_tuner PRIVATE ${SRC_DIR})
+set_target_properties(fm_demod_tuner PROPERTIES CXX_STANDARD 17)
+target_link_libraries(fm_demod_tuner PRIVATE 
+    getopt
+    app_lib device_lib
+    imgui implot gui_lib device_gui_lib 
+    ${RTLSDR_LIBS} ${EXTRA_LIBS})
 
 if(WIN32)
     # Copy dlls for prebuilt librtlsdr
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        add_custom_command(TARGET main 
+        add_custom_command(TARGET fm_demod_tuner
             POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${rtlsdr_DIR}/bin/x64/
-            $<TARGET_FILE_DIR:main>)
+            $<TARGET_FILE_DIR:fm_demod_tuner>)
     elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
         message(FATAL_ERROR "x86 rtlsdr is unsupported")
     endif()
@@ -141,5 +171,11 @@ target_compile_options(getopt       PRIVATE "/MP")
 target_compile_options(demod_lib    PRIVATE "/MP")
 target_compile_options(rds_lib      PRIVATE "/MP")
 target_compile_options(audio_lib    PRIVATE "/MP")
-target_compile_options(main         PRIVATE "/MP")
+target_compile_options(device_lib   PRIVATE "/MP")
+target_compile_options(app_lib      PRIVATE "/MP")
+
+target_compile_options(gui_lib      PRIVATE "/MP")
+target_compile_options(device_gui_lib   PRIVATE "/MP")
+target_compile_options(fm_demod         PRIVATE "/MP")
+target_compile_options(fm_demod_tuner   PRIVATE "/MP")
 endif()
