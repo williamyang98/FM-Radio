@@ -5,6 +5,7 @@
 
 #include <limits.h>
 #include <imgui.h>
+#include "imgui_extensions.h"
 #include <fmt/core.h>
 
 void RenderDeviceControls(Device& device);
@@ -90,32 +91,42 @@ void RenderDeviceControls(Device& device) {
 		preview_label = fmt::format("{:.1f}dB", device.GetSelectedGain());
 	}
 
-	if (ImGui::BeginCombo("Gains", preview_label.c_str())) {
-		if (ImGui::Selectable("Automatic", !device.GetIsGainManual())) {
+	auto& gains = device.GetGainList();
+	const auto curr_gain = device.GetSelectedGain();
+	int selected_index = -1;
+
+	if (device.GetIsGainManual()) {
+		for (int i = 0; i < gains.size(); i++) {
+			if (gains[i] == curr_gain) {
+				selected_index = i;
+				break;
+			}
+		}
+	}
+
+	std::string gain_label = "Automatic";
+	if (selected_index >= 0) {
+		gain_label = fmt::format("{:.1f}dB", gains[selected_index]);
+	}
+
+	if (ImGui::SliderInt("Gain", &selected_index, -1, (int)gains.size()-1, gain_label.c_str())) {
+		if (selected_index == -1) {
 			device.SetAutoGain();
+		} else {
+			auto gain = gains[selected_index];
+			device.SetGain(gain);
 		}
-		for (auto gain: device.GetGainList()) {
-			const auto label_str = fmt::format("{:.1f}dB", gain);
-			const bool is_selected = 
-				device.GetIsGainManual() && (device.GetSelectedGain() == gain);
-			if (ImGui::Selectable(label_str.c_str(), is_selected)) {
-				device.SetGain(gain);
-			}
-			if (is_selected) {
-				ImGui::SetItemDefaultFocus();
-			}
-		}
-		ImGui::EndCombo();
 	}
 
 	uint32_t freq = device.GetSelectedFrequency();
 
-	ImGui::Text("Frequency");
+	ImGui::BeginGroupPanel("Center Frequency");
 	if (RenderFrequencyControls(freq)) {
 		device.SetCenterFrequency(freq);
 	}
+	ImGui::EndGroupPanel();
 
-	ImGui::Text("Frequency Hopping");
+	ImGui::BeginGroupPanel("Hopping Frequency");
 	static uint32_t freq_hop = 800'000;
 	RenderFrequencyControls(freq_hop);
 	if (ImGui::Button("Hop -")) {
@@ -127,6 +138,7 @@ void RenderDeviceControls(Device& device) {
 		freq += freq_hop;
 		device.SetCenterFrequency(freq);
 	}
+	ImGui::EndGroupPanel();
 }
 
 template <typename T>
@@ -159,7 +171,7 @@ bool RenderFrequencyControls(uint32_t& x) {
 	const float digit_width = ImGui::CalcTextSize("9").x*1.5f + ImGui::GetStyle().FramePadding.x*2.0f;
 	ImGui::PushID((void*)(&x));
 	ImGui::PushItemWidth(digit_width);
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 1.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, ImGui::GetStyle().CellPadding.y));
 	bool is_changed = false;
 	for (int i = 0; i < TOTAL_DIGITS; i++) {
 		const auto flags = ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput;
@@ -179,11 +191,14 @@ bool RenderFrequencyControls(uint32_t& x) {
 		}
 
 		if (ImGui::IsItemHovered()) {
-			if (ImGui::GetScrollY() > 0.0f) {
+			const float scroll = ImGui::GetIO().MouseWheel;
+			if (scroll > 0.0f) {
 				v++;
+				is_changed = true;
 			}
-			if (ImGui::GetScrollY() < 0.0f) {
+			if (scroll < 0.0f) {
 				v--;
+				is_changed = true;
 			}
 		}
 

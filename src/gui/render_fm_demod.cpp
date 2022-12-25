@@ -96,7 +96,7 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
             auto x = demod.GetBasebandMagnitudeSpectrum();
             const float Fs = (float)demod.GetBasebandSampleRate();
             const int N = (int)x.size();
-            auto range = ImPlotRange(-50, 20);
+            auto range = ImPlotRange(-80, 20);
             auto label = "Baseband Spectrum";
             const float xscale = Fs/(float)N;
             const float xstart = -Fs/2.0f;
@@ -126,7 +126,7 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
             auto x = demod.GetDownsampledBasebandMagnitudeSpectrum();
             const float Fs = (float)demod.GetDownsampledBasebandSampleRate();
             const int N = (int)x.size();
-            auto range = ImPlotRange(-50, 20);
+            auto range = ImPlotRange(-80, 20);
             auto label = "Polyphase DS LPF";
             const float xscale = Fs/(float)N;
             const float xstart = -Fs/2.0f;
