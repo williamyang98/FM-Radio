@@ -16,16 +16,23 @@
 #include "gui/imgui_skeleton.h"
 #include "gui/font_awesome_definitions.h"
 #include "gui/render_app.h"
+#include "gui/render_portaudio_controls.h"
 
 #include "app.h"
+#include "audio/portaudio_output.h"
+#include "audio/resampled_pcm_player.h"
+#include "audio/portaudio_utility.h"
 #include "utility/getopt/getopt.h"
 
 class Renderer: public ImguiSkeleton
 {
 private:
     App& app;
+    PaDeviceList& pa_devices;
+    PortAudio_Output& pa_output;
 public:
-    Renderer(App& _app): app(_app) {}
+    Renderer(App& _app, PaDeviceList& _pa_devices, PortAudio_Output& _pa_output)
+    : app(_app), pa_devices(_pa_devices), pa_output(_pa_output) {}
     virtual GLFWwindow* Create_GLFW_Window(void) {
         return glfwCreateWindow(
             1280, 720, 
@@ -51,6 +58,12 @@ public:
     virtual void Render() {
         if (ImGui::Begin("Our workspace")) {
             ImGui::DockSpace(ImGui::GetID("Our workspace"));
+
+            if (ImGui::Begin("Audio Controls")) {
+                RenderPortAudioControls(pa_devices, pa_output);
+            }
+            ImGui::End();
+
             RenderApp(app);
         }
         ImGui::End();
@@ -60,10 +73,9 @@ public:
     }
 };
 
-
 void usage() {
     fprintf(stderr, 
-        "main, simple sdr example\n\n"
+        "fm_demod, Demodulate baseband FM signal from input stream\n\n"
         "\t[-i input filename (default: None)]\n"
         "\t    If no file is provided then stdin is used\n"
         "\t[-o output filename (default: None)]\n"
@@ -129,17 +141,40 @@ int main(int argc, char** argv) {
         }
     }
 
+    fprintf(stderr, "Using a block size of %u\n", block_size);
 #ifdef _WIN32
     _setmode(_fileno(fp_in), _O_BINARY);
     _setmode(_fileno(fp_out), _O_BINARY);
 #endif
 
-
+    // Setup audio
     auto pa_handler = ScopedPaHandler();
-    fprintf(stderr, "Using a block size of %u\n", block_size);
-    auto app = App(block_size);
-    auto renderer = Renderer(app);
+    PaDeviceList pa_devices;
+    PortAudio_Output pa_output;
+    std::unique_ptr<Resampled_PCM_Player> pcm_player;
+    {
+        auto& mixer = pa_output.GetMixer();
+        auto buf = mixer.CreateManagedBuffer(4);
+        auto Fs = pa_output.GetSampleRate();
+        pcm_player = std::make_unique<Resampled_PCM_Player>(buf, Fs);
 
+        #ifdef _WIN32
+        const auto target_host_api_index = Pa_HostApiTypeIdToHostApiIndex(PORTAUDIO_TARGET_HOST_API_ID);
+        const auto target_device_index = Pa_GetHostApiInfo(target_host_api_index)->defaultOutputDevice;
+        pa_output.Open(target_device_index);
+        #else
+        pa_output.Open(Pa_GetDefaultOutputDevice());
+        #endif
+    }
+
+    // Setup fm demodulator
+    auto app = App(block_size);
+    app.OnAudioBlock().Attach([&pcm_player](tcb::span<const Frame<float>> x, int Fs) {
+        pcm_player->SetInputSampleRate(Fs);
+        pcm_player->ConsumeBuffer(x);
+    });
+
+    // Setup input
     bool is_running = true;
     auto input_buf = std::vector<std::complex<uint8_t>>(block_size);
     auto runner_thread = std::make_unique<std::thread>([&]() {
@@ -154,7 +189,11 @@ int main(int argc, char** argv) {
         is_running = false;
     });
 
+    // Setup gui
+    auto renderer = Renderer(app, pa_devices, pa_output);
     const int rv = RenderImguiSkeleton(&renderer);
+
+    // Close app after gui closes
     is_running = false;
     fclose(fp_in);
     runner_thread->join();

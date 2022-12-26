@@ -16,23 +16,26 @@
 #include "gui/imgui_skeleton.h"
 #include "gui/font_awesome_definitions.h"
 #include "gui/render_app.h"
+#include "gui/render_portaudio_controls.h"
+#include "gui/render_device_selector.h"
 
 #include "app.h"
-#include "utility/getopt/getopt.h"
+#include "audio/portaudio_output.h"
+#include "audio/resampled_pcm_player.h"
+#include "audio/portaudio_utility.h"
 #include "device/device_selector.h"
-#include "gui/render_device_selector.h"
+#include "utility/getopt/getopt.h"
 
 class Renderer: public ImguiSkeleton
 {
 private:
     App& app;
+    PaDeviceList& pa_devices;
+    PortAudio_Output& pa_output;
     DeviceSelector& device_selector;
 public:
-    Renderer(App& _app, DeviceSelector& _device_selector)
-    : app(_app), device_selector(_device_selector)
-    {
-
-    }
+    Renderer(App& _app, PaDeviceList& _pa_devices, PortAudio_Output& _pa_output, DeviceSelector& _device_selector)
+    : app(_app), pa_devices(_pa_devices), pa_output(_pa_output), device_selector(_device_selector) {}
     virtual GLFWwindow* Create_GLFW_Window(void) {
         return glfwCreateWindow(
             1280, 720, 
@@ -58,12 +61,18 @@ public:
     virtual void Render() {
         if (ImGui::Begin("Our workspace")) {
             ImGui::DockSpace(ImGui::GetID("Our workspace"));
-            RenderApp(app);
+
+            if (ImGui::Begin("Audio Controls")) {
+                RenderPortAudioControls(pa_devices, pa_output);
+            }
+            ImGui::End();
 
             if (ImGui::Begin("Device Controls")) {
                 RenderDeviceSelector(device_selector);
             } 
             ImGui::End();
+
+            RenderApp(app);
         }
         ImGui::End();
     }
@@ -72,10 +81,9 @@ public:
     }
 };
 
-
 void usage() {
     fprintf(stderr, 
-        "main, simple sdr example\n\n"
+        "fm_demod_tuner, Demodulate baseband FM signal from sdr device\n\n"
         "\t[-o output filename (default: None)]\n"
         "\t    If no file is provided then stdout is used\n"
         "\t[-b block size (default: 65536)]\n"
@@ -126,17 +134,40 @@ int main(int argc, char** argv) {
         }
     }
 
+    fprintf(stderr, "Using a block size of %u\n", block_size);
 #ifdef _WIN32
     _setmode(_fileno(fp_out), _O_BINARY);
 #endif
 
-
+    // Setup audio
     auto pa_handler = ScopedPaHandler();
-    fprintf(stderr, "Using a block size of %u\n", block_size);
-    auto app = App(block_size);
-    auto device_selector = DeviceSelector();
-    auto renderer = Renderer(app, device_selector);
+    PaDeviceList pa_devices;
+    PortAudio_Output pa_output;
+    std::unique_ptr<Resampled_PCM_Player> pcm_player;
+    {
+        auto& mixer = pa_output.GetMixer();
+        auto buf = mixer.CreateManagedBuffer(4);
+        auto Fs = pa_output.GetSampleRate();
+        pcm_player = std::make_unique<Resampled_PCM_Player>(buf, Fs);
 
+        #ifdef _WIN32
+        const auto target_host_api_index = Pa_HostApiTypeIdToHostApiIndex(PORTAUDIO_TARGET_HOST_API_ID);
+        const auto target_device_index = Pa_GetHostApiInfo(target_host_api_index)->defaultOutputDevice;
+        pa_output.Open(target_device_index);
+        #else
+        pa_output.Open(Pa_GetDefaultOutputDevice());
+        #endif
+    }
+
+    // Setup fm demodulator
+    auto app = App(block_size);
+    app.OnAudioBlock().Attach([&pcm_player](tcb::span<const Frame<float>> x, int Fs) {
+        pcm_player->SetInputSampleRate(Fs);
+        pcm_player->ConsumeBuffer(x);
+    });
+
+    // Setup input
+    auto device_selector = DeviceSelector();
     device_selector.OnDeviceChange().Attach([&](Device* device) {
         if (device == NULL) return;
         device->OnData().Attach([&](tcb::span<const std::complex<uint8_t>> x) {
@@ -154,7 +185,8 @@ int main(int argc, char** argv) {
 		}
 	});
 
+    // Setup gui
+    auto renderer = Renderer(app, pa_devices, pa_output, device_selector);
     const int rv = RenderImguiSkeleton(&renderer);
-
     return rv;
 }

@@ -5,18 +5,10 @@
 
 #include <imgui.h>
 #include <implot.h>
-#include "render_portaudio_controls.h"
 #include "render_fm_demod.h"
 #include "render_rds_database.h"
 
 void RenderApp(App& app) {
-    if (ImGui::Begin("Audio Controls")) {
-        auto& device_list = app.GetPortAudioDeviceList();
-        auto& audio_output = app.GetPortAudioOutput();
-        RenderPortAudioControls(device_list, audio_output);
-    }
-    ImGui::End();
-
     if (ImGui::Begin("I/O Controls")) {
         ImGui::Checkbox("Output RDS Signal", &(app.GetIsOutputRDSSignal()));
     }

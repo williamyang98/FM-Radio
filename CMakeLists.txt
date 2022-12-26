@@ -131,11 +131,15 @@ add_library(app_lib STATIC
     ${APP_DIR}/app.cpp)
 set_target_properties(app_lib PROPERTIES CXX_STANDARD 17)
 target_include_directories(app_lib PRIVATE ${APP_DIR} ${SRC_DIR})
-target_link_libraries(app_lib PRIVATE 
-    audio_lib dsp_lib demod_lib rds_lib 
-    ${PORTAUDIO_LIBS})
+target_link_libraries(app_lib PRIVATE dsp_lib demod_lib rds_lib)
 
 # Our application
+add_executable(fm_demod_benchmark ${SRC_DIR}/fm_demod_benchmark.cpp)
+target_include_directories(fm_demod_benchmark PRIVATE ${SRC_DIR})
+set_target_properties(fm_demod_benchmark PROPERTIES CXX_STANDARD 17)
+target_link_libraries(fm_demod_benchmark PRIVATE 
+    getopt app_lib ${EXTRA_LIBS})
+
 add_executable(fm_demod ${SRC_DIR}/fm_demod.cpp)
 target_include_directories(fm_demod PRIVATE ${SRC_DIR})
 set_target_properties(fm_demod PROPERTIES CXX_STANDARD 17)
@@ -143,6 +147,7 @@ target_link_libraries(fm_demod PRIVATE
     getopt
     app_lib
     imgui implot gui_lib
+    audio_lib ${PORTAUDIO_LIBS}
     ${EXTRA_LIBS})
 
 add_executable(fm_demod_tuner ${SRC_DIR}/fm_demod_tuner.cpp)
@@ -152,7 +157,9 @@ target_link_libraries(fm_demod_tuner PRIVATE
     getopt
     app_lib device_lib
     imgui implot gui_lib device_gui_lib 
-    ${RTLSDR_LIBS} ${EXTRA_LIBS})
+    audio_lib ${PORTAUDIO_LIBS}
+    ${RTLSDR_LIBS}
+    ${EXTRA_LIBS})
 
 if(WIN32)
     # Copy dlls for prebuilt librtlsdr
@@ -167,15 +174,17 @@ if(WIN32)
 endif()
 
 if(MSVC)
-target_compile_options(getopt       PRIVATE "/MP")
-target_compile_options(demod_lib    PRIVATE "/MP")
-target_compile_options(rds_lib      PRIVATE "/MP")
-target_compile_options(audio_lib    PRIVATE "/MP")
-target_compile_options(device_lib   PRIVATE "/MP")
-target_compile_options(app_lib      PRIVATE "/MP")
+target_compile_options(getopt               PRIVATE "/MP")
+target_compile_options(demod_lib            PRIVATE "/MP")
+target_compile_options(rds_lib              PRIVATE "/MP")
+target_compile_options(audio_lib            PRIVATE "/MP")
+target_compile_options(device_lib           PRIVATE "/MP")
+target_compile_options(app_lib              PRIVATE "/MP")
 
-target_compile_options(gui_lib      PRIVATE "/MP")
-target_compile_options(device_gui_lib   PRIVATE "/MP")
-target_compile_options(fm_demod         PRIVATE "/MP")
-target_compile_options(fm_demod_tuner   PRIVATE "/MP")
+target_compile_options(gui_lib              PRIVATE "/MP")
+target_compile_options(device_gui_lib       PRIVATE "/MP")
+
+target_compile_options(fm_demod_benchmark   PRIVATE "/MP")
+target_compile_options(fm_demod             PRIVATE "/MP")
+target_compile_options(fm_demod_tuner       PRIVATE "/MP")
 endif()

@@ -9,6 +9,8 @@ App::App(const int _block_size)
 : block_size(_block_size),
   input_buf(data_u8_buf) 
 {
+    is_output_rds_signal = false;
+
     aligned_block_buf = AllocateJoint(
         data_u8_buf,            BufferParameters{ (size_t)block_size },
         data_f32_buf,           BufferParameters{ (size_t)block_size, SIMD_ALIGN_AMOUNT },
@@ -19,26 +21,8 @@ App::App(const int _block_size)
     differential_manchester_decoder = std::make_unique<DifferentialManchesterDecoder>(rds_bytes_decode_buf);
     rds_decoding_chain = std::make_unique<RDS_Decoding_Chain>();
 
-    is_output_rds_signal = false;
-
-    {
-        auto& mixer = pa_output.GetMixer();
-        auto buf = mixer.CreateManagedBuffer(4);
-        auto Fs = pa_output.GetSampleRate();
-        pcm_player = std::make_unique<Resampled_PCM_Player>(buf, Fs);
-
-        #ifdef _WIN32
-        const auto target_host_api_index = Pa_HostApiTypeIdToHostApiIndex(PORTAUDIO_TARGET_HOST_API_ID);
-        const auto target_device_index = Pa_GetHostApiInfo(target_host_api_index)->defaultOutputDevice;
-        pa_output.Open(target_device_index);
-        #else
-        pa_output.Open(Pa_GetDefaultOutputDevice());
-        #endif
-    }
-
     broadcast_fm_demod->OnAudioOut().Attach([this](tcb::span<const Frame<float>> x, const int Fs) {
-        pcm_player->SetInputSampleRate(Fs);
-        pcm_player->ConsumeBuffer(x);
+        obs_on_audio_block.Notify(x, Fs);
     });
      
     broadcast_fm_demod->OnRDSOut().Attach([this](tcb::span<const float> x) {
