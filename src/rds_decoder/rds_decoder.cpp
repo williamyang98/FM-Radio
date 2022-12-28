@@ -383,9 +383,18 @@ bool RDS_Decoder::OnGroup4A(rds_group_t group) {
     int year, month, day;
     mjd_to_ymd((long)MJD, year, month, day);
 
-    HANDLER->OnDate(day, month, year);
-    HANDLER->OnTime(hour, minute);
-    HANDLER->OnLocalTimeOffset(LTO);
+    if (has_block_C) {
+        HANDLER->OnDate(day, month, year);
+    }
+
+    if (has_block_C && has_block_D) {
+        HANDLER->OnTime(hour, minute);
+    }
+
+    if (has_block_D) {
+        HANDLER->OnLocalTimeOffset(LTO);
+    }
+
     APPEND_MESSAGE("rfu0=%u, date=%02u/%02u/%04u, time=%02u:%02u, LTO=%d",
         rfu0,
         day, month, year,

@@ -75,6 +75,7 @@ target_link_libraries(demod_lib PRIVATE dsp_lib)
 
 set(RDS_DIR ${SRC_DIR}/rds_decoder)
 add_library(rds_lib STATIC
+    ${RDS_DIR}/crc10.cpp
     ${RDS_DIR}/rds_group_sync.cpp
     ${RDS_DIR}/rds_decoder.cpp
     ${RDS_DIR}/rds_database_decoder_handler.cpp)
