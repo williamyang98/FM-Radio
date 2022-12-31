@@ -38,12 +38,15 @@ public:
     //          b5 b4 b3 b2 b1 b0 => y1
     // N = produce N output samples
     void process(const T* x, T* y, const int N) {
-        // continue from previous block
         const int M0 = _min(K-1, N);
+
+        // NOTE: When downsampling we don't expect x and y to be the same buffer
+        // continue from previous block
         for (int i = 0, j = 0; i < M0; i++, j+=M) {
             push_values(&x[j], M);
             y[i] = apply_filter(xn.data());
         }
+
 
         // inplace math
         for (int i = M0, j = 0; i < N; i++, j+=M) {
@@ -120,8 +123,10 @@ public:
     //          b7 b6 b5 b4 b3 b2 b1 b0 => y3
     // N = process N input samples
     void process(const T* x, T* y, const int N) {
-        // continue from previous block
         const int M0 = _min(K-1, N);
+
+        // NOTE: When upsampling we don't expect x and y to be the same buffer
+        // continue from previous block
         for (int i = 0; i < M0; i++) {
             push_value(x[i]);
             for (int phase = 0; phase < L; phase++) {

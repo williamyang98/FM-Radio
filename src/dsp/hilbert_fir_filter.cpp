@@ -59,17 +59,19 @@ void Hilbert_FIR_Filter::process(const float* x, std::complex<float>* y, const i
 void Hilbert_FIR_Filter::process(const float* x, float* y, const int N)
 {
     const int M = (K-1)/2;
+    const int M0 = _min(K-1, N);
+
+    // inplace math
+    // NOTE: We do this first and reverse so we don't destroy the first K samples
+    //       This can occur if x and y are the same buffer
+    for (int i = (N-1), j = (N-1)-(K-1); i >= M0; i--, j--) {
+        y[i] = apply_filter(&x[j]);
+    }
 
     // continue from previous block
-    const int M0 = _min(K-1, N);
     for (int i = 0; i < M0; i++) {
         push_value(x[i]);
         y[i] = apply_filter(xn.data());
-    }
-
-    // inplace math
-    for (int i = M0, j = 0; i < N; i++, j++) {
-        y[i] = apply_filter(&x[j]);
     }
 
     // push end of buffer
