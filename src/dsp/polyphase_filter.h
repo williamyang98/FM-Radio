@@ -21,8 +21,12 @@ public:
     : M(_M), K(_K), NN(_M*_K),
       b(NN), xn(NN)
      {
-        for (int i = 0 ; i < NN; i++) {
+        for (int i = 0; i < NN; i++) {
             b[i] = _b[(NN-1)-i];
+        }
+
+        for (int i = 0; i < NN; i++) {
+            xn[i] = 0;
         }
     }
 
@@ -101,6 +105,10 @@ public:
                 // repack the coefficients so that they are contiguous
                 b[j0] = _b[(NN-1)-j1] * (float)L;
             }
+        }
+
+        for (int i = 0; i < K; i++) {
+            xn[i] = 0;
         }
     }
 

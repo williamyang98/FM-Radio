@@ -18,6 +18,10 @@ public:
         for (int i = 0; i < K; i++) {
             b[i] = _b[(K-1)-i];
         }
+
+        for (int i = 0; i < K; i++) {
+            xn[i] = 0;
+        }
     }
 
     void process(const T* x, T* y, const int N) {
