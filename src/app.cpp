@@ -43,7 +43,7 @@ size_t App::Process(tcb::span<const std::complex<uint8_t>> x) {
     const size_t N = x.size();
     size_t nb_read = 0;
     while (nb_read < N) {
-        nb_read += input_buf.ConsumeBuffer(x);
+        nb_read += input_buf.ConsumeBuffer(x.subspan(nb_read));
         if (input_buf.IsFull()) {
             Run();
             input_buf.Reset();
