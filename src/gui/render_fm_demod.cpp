@@ -325,6 +325,7 @@ void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls) {
     ImGui::SliderFloat("L-R gain", &controls.audio_stereo_mix_factor, 0.0f, 10.0f);
     ImGui::Checkbox("L-R Denoise LPF", &controls.is_lmr_lpf);
     ImGui::Checkbox("Pilot peak filter", &controls.is_pilot_tone_peak_filter);
+    ImGui::Checkbox("Calculate FFTs", &controls.is_calculate_fft);
 }
 
 void Render_Magnitude_Spectrum_Controls(Calculate_FFT_Mag& calc) {

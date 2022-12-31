@@ -334,7 +334,9 @@ void Broadcast_FM_Demod::Process(tcb::span<const std::complex<float>> x)
     // [audio_lpr_buf, audio_lmr_buf] -> ... -> audio_stereo_out_buf
     CombineAudio();
 
-    UpdateFFTs(x);
+    if (controls.is_calculate_fft) {
+        UpdateFFTs(x);
+    }
 
     // Output demodulated data to listeners
     obs_on_audio_block.Notify(audio_stereo_out_buf, Fs_audio_stereo);

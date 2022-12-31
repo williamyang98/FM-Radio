@@ -56,7 +56,7 @@ private:
     std::unique_ptr<IIR_Filter<float>> filt_iir_lpf_pll_phase_error;
     float pll_prev_phase_error;
 
-    AlignedBlock aligned_block_buf;
+    AlignedVector<uint8_t> aligned_block_buf;
     // internal buffers
     tcb::span<std::complex<float>> pll_sym_buf;
     tcb::span<bool> zcd_trig_buf;

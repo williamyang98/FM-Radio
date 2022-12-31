@@ -63,6 +63,8 @@ struct Broadcast_FM_Demod_Controls {
     // NOTE: Using the peak filter means some unknown phase shift in the pilot
     //       This causes the stereo L-R data to be out of phase
     bool is_pilot_tone_peak_filter = false;
+
+    bool is_calculate_fft = false;
 };
 
 class Broadcast_FM_Demod 
@@ -147,7 +149,7 @@ private:
     std::unique_ptr<PolyphaseDownsampler<Frame<float>>> filt_poly_lpf_ds_audio_stereo;
 
     // Allocate buffers aligned
-    AlignedBlock aligned_block_buf;
+    AlignedVector<uint8_t> aligned_block_buf;
     // 1. FM demodulation
     tcb::span<std::complex<float>> lpf_ds_buf;
     tcb::span<float> fm_demod_buf;

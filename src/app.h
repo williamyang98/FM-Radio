@@ -20,7 +20,7 @@ class App
 private:
     const int block_size;
 
-    AlignedBlock aligned_block_buf;
+    AlignedVector<uint8_t> aligned_block_buf;
     tcb::span<std::complex<uint8_t>> data_u8_buf;
     tcb::span<std::complex<float>> data_f32_buf;
     tcb::span<uint8_t> rds_bytes_decode_buf;

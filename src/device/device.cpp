@@ -12,7 +12,7 @@ Device::Device(rtlsdr_dev_t* _device, const DeviceDescriptor& _descriptor, const
 
     SearchGains();
     // SetAutoGain();
-    SetNearestGain(19.0f);
+    SetNearestGain(35.0f);
     SetSamplingFrequency(1024000);
     rtlsdr_set_bias_tee(device, 0);
     rtlsdr_reset_buffer(device);
