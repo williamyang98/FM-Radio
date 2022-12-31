@@ -1,87 +1,29 @@
 #pragma once
+#include "utility/aligned_vector.h"
+
+#define _min(A,B) (A > B) ? B : A
+#define _max(A,B) (A > B) ? A : B
 
 template <typename T>
-class PolyphaseUpsampler 
-{
-private:
-    const int L;
-    const int K;
-    const int NN;
-    float* b;
-    T* xn;
-    int Ki;
-public:
-    // b = FIR filter coefficients of length L*K
-    // L = upsampling factor and total phases
-    // K = number of coefficients per phase
-    PolyphaseUpsampler(const float *_b, const int _L, const int _K) 
-    : L(_L), K(_K), NN(_L*_K) {
-        b = new float[NN];
-        for (int i = 0 ; i < NN; i++) {
-            b[i] = _b[i] * (float)L;
-        }
-
-        xn = new T[K]{0};
-        Ki = 0;
-    }
-
-    ~PolyphaseUpsampler() {
-        delete [] b;
-        delete [] xn;
-    }
-
-    // E.g. L = 4, K = 2, L*K = 8
-    //  0  0  0 x0  0  0  0 x1  0  0  0 x2 
-    // b7 b6 b5 b4 b3 b2 b1 b0          => y0
-    //    b7 b6 b5 b4 b3 b2 b1 b0       => y1
-    //       b7 b6 b5 b4 b3 b2 b1 b0    => y2
-    //          b7 b6 b5 b4 b3 b2 b1 b0 => y3
-    // N = process N input samples
-    void process(const T* x, T* y, const int N) {
-        for (int i = 0; i < N; i++) {
-            xn[Ki] = x[i];
-
-            for (int j = 0; j < L; j++) {
-                const int yi = i*L + j;
-                y[yi] = 0;
-                for (int k = 0; k < K; k++) {
-                    const int xi = (K+Ki-k)%K;
-                    y[yi] += xn[xi] * b[j + k*L];
-                }
-            }
-            Ki = (Ki+1)%K;
-        }
-    }
-};
-
-template <typename T>
-class PolyphaseDownsampler 
+class PolyphaseDownsampler
 {
 private:
     const int M;
     const int K;
     const int NN;
-    float* b;
-    T* xn;
-    int Ki;
+    AlignedVector<float> b;
+    AlignedVector<T> xn;
 public:
     // b = FIR filter with M*K coefficients
     // M = downsampling factor and total phases 
     // K = total coefficients per phase
     PolyphaseDownsampler(const float *_b, const int _M, const int _K) 
-    : M(_M), K(_K), NN(_M*_K) {
-        b = new float[NN];
+    : M(_M), K(_K), NN(_M*_K),
+      b(NN), xn(NN)
+     {
         for (int i = 0 ; i < NN; i++) {
-            b[i] = _b[i];
+            b[i] = _b[(NN-1)-i];
         }
-
-        xn = new T[NN]{0};
-        Ki = 0;
-    }
-
-    ~PolyphaseDownsampler() {
-        delete [] b;
-        delete [] xn;
     }
 
     // E.g. M = 3, K = 2, M*K = 6
@@ -92,20 +34,135 @@ public:
     //          b5 b4 b3 b2 b1 b0 => y1
     // N = produce N output samples
     void process(const T* x, T* y, const int N) {
-        for (int xi = 0, yi = 0; yi < N; yi++, xi+=M) {
-            // get M samples and distribute along phases
-            for (int i = 0; i < M; i++) {
-                Ki = (Ki+1)%NN;
-                xn[Ki] = x[xi+i];
-            }
-
-            y[yi] = 0;
-            for (int i = 0; i < NN; i++) {
-                const int xni = (NN+Ki-i) % NN;
-                y[yi] += xn[xni] * b[i];
-            }
+        // continue from previous block
+        const int M0 = _min(K-1, N);
+        for (int i = 0, j = 0; i < M0; i++, j+=M) {
+            push_values(&x[j], M);
+            y[i] = apply_filter(xn.data());
         }
+
+        // inplace math
+        for (int i = M0, j = 0; i < N; i++, j+=M) {
+            y[i] = apply_filter(&x[j]);
+        }
+
+        // push end of buffer
+        const int M1 = _max(N-K, M0);
+        {
+            const int i = M1;
+            const int j = i*M;
+            push_values(&x[j], (N-i)*M);
+        }
+    }
+
+private:
+    void push_values(const T* x, const int N) {
+        const int M = NN-N;
+        for (int i = 0; i < M; i++) {
+            xn[i] = xn[i+N];
+        }
+        for (int i = M, j = 0; i < NN; i++, j++) {
+            xn[i] = x[j];
+        }
+    }
+
+    T apply_filter(const T* x) {
+        T y;
+        y = 0;
+        for (int i = 0; i < NN; i++) {
+            y += x[i] * b[i];
+        }
+        return y;
     }
 };
 
+template <typename T>
+class PolyphaseUpsampler
+{
+private:
+    const int L;
+    const int K;
+    const int NN;
+    AlignedVector<float> b;
+    AlignedVector<T> xn;
+public:
+    // b = FIR filter coefficients of length L*K
+    // L = upsampling factor and total phases
+    // K = number of coefficients per phase
+    PolyphaseUpsampler(const float *_b, const int _L, const int _K) 
+    : L(_L), K(_K), NN(_L*_K),
+      b(NN), xn(K)
+    {
+        for (int phase = 0; phase < L; phase++) {
+            const int phase_c = (L-1)-phase;
+            for (int i = 0; i < K; i++) {
+                const int j0 = phase_c*K + i;
+                const int j1 = phase + i*L;
+                // repack the coefficients so that they are contiguous
+                b[j0] = _b[(NN-1)-j1] * (float)L;
+            }
+        }
+    }
 
+    // E.g. L = 4, K = 2, L*K = 8
+    //  0  0  0 x0  0  0  0 x1  0  0  0 x2 
+    // b7 b6 b5 b4 b3 b2 b1 b0          => y0
+    //    b7 b6 b5 b4 b3 b2 b1 b0       => y1
+    //       b7 b6 b5 b4 b3 b2 b1 b0    => y2
+    //          b7 b6 b5 b4 b3 b2 b1 b0 => y3
+    // N = process N input samples
+    void process(const T* x, T* y, const int N) {
+        // continue from previous block
+        const int M0 = _min(K-1, N);
+        for (int i = 0; i < M0; i++) {
+            push_value(x[i]);
+            for (int phase = 0; phase < L; phase++) {
+                const int yi = i*L + phase;
+                y[yi] = apply_filter(xn.data(), phase);
+            }
+        }
+
+        // inplace math
+        for (int i = M0, j = 0; i < N; i++, j++) {
+            for (int phase = 0; phase < L; phase++) {
+                const int yi = i*L + phase;
+                y[yi] = apply_filter(&x[j], phase);
+            }
+        }
+
+        // push end of buffer
+        const int M1 = _max(N-K, M0);
+        push_values(&x[M1], N-M1);
+    }
+
+private:
+    void push_value(T x) {
+        for (int i = 0; i < (K-1); i++) {
+            xn[i] = xn[i+1];
+        }
+        xn[K-1] = x;
+    }
+
+    void push_values(const T* x, const int N) {
+        const int M = K-N;
+        for (int i = 0; i < M; i++) {
+            xn[i] = xn[i+N];
+        }
+        for (int i = M, j = 0; i < K; i++, j++) {
+            xn[i] = x[j];
+        }
+    }
+
+    T apply_filter(const T* x, const int phase) {
+        auto* b0 = &b[phase*K];
+        T y; 
+        y = 0;
+        for (int i = 0; i < K; i++) {
+            y += x[i] * b0[i];
+        }
+        return y;
+    }
+};
+
+#undef _min
+#undef _max

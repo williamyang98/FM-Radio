@@ -1,40 +1,68 @@
-// basic implementations of IIR, FIR filters, AGC and discrete integrator
 #pragma once
+#include "utility/aligned_vector.h"
+
+#define _min(A,B) (A > B) ? B : A
+#define _max(A,B) (A > B) ? A : B
 
 template <typename T>
 class FIR_Filter 
 {
 public:
     const int K;
-    int Ki;
-    float* b; 
-    T* xn;
-public:
+    AlignedVector<float> b;
+    AlignedVector<T> xn;
     FIR_Filter(const float* _b, const int _K) 
-    : K(_K)
+    : K(_K), b(_K), xn(_K)
     {
-        b = new float[K];
+        // time reverse the filter
         for (int i = 0; i < K; i++) {
-            b[i] = _b[i];
+            b[i] = _b[(K-1)-i];
         }
-        xn = new T[K]{};
-        Ki = 0;
     }
 
     void process(const T* x, T* y, const int N) {
-        for (int i = 0; i < N; i++) {
-            xn[Ki] = x[i];
-            y[i] = 0.0f;
-            for (int j = 0; j < K; j++) {
-                y[i] += xn[(K+Ki-j)%K] * b[j];
-            }
-            Ki = (Ki+1)%K;
+        // continue from previous block
+        const int M0 = _min(K-1, N);
+        for (int i = 0; i < M0; i++) {
+            push_value(x[i]);
+            y[i] = apply_filter(xn.data());
+        }
+
+        // inplace math
+        for (int i = M0, j = 0; i < N; i++, j++) {
+            y[i] = apply_filter(&x[j]);
+        }
+
+        // push end of buffer
+        const int M1 = _max(N-K, M0);
+        push_values(&x[M1], N-M1);
+    }
+
+private:
+    void push_value(T x) {
+        for (int i = 0; i < (K-1); i++) {
+            xn[i] = xn[i+1];
+        }
+        xn[K-1] = x;
+    }
+
+    void push_values(const T* x, const int N) {
+        const int M = K-N;
+        for (int i = 0; i < M; i++) {
+            xn[i] = xn[i+N];
+        }
+        for (int i = M, j = 0; i < K; i++, j++) {
+            xn[i] = x[j];
         }
     }
 
-    ~FIR_Filter() {
-        delete [] b;
-        delete [] xn;
+    T apply_filter(const T* x) {
+        T y; 
+        y = 0;
+        for (int i = 0; i < K; i++) {
+            y += x[i] * b[i];
+        }
+        return y;
     }
 };
 
@@ -151,5 +179,5 @@ public:
     }
 };
 
-
-
+#undef _min
+#undef _max
