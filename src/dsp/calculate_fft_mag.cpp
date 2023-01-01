@@ -2,14 +2,22 @@
 #include <cmath>
 
 Calculate_FFT_Mag::Calculate_FFT_Mag() {
-    average_beta = 0.9f;
-    mode = Mode::NORMAL;
+    average_beta = 0.1f;
+    mode = Mode::AVERAGE;
+    trigger = Trigger::SINGLE;
+    single_trigger_flag = false;
 }
 
 void Calculate_FFT_Mag::Process(
     tcb::span<const std::complex<float>> x, 
     tcb::span<float> y)
 {
+    // Single update the magnitude spectrum
+    if (trigger == Trigger::SINGLE) {
+        if (!single_trigger_flag) return;
+        single_trigger_flag = false;
+    }
+
     const size_t N = y.size();
     const float M = (float)(2*N-1);
 

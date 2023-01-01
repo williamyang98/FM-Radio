@@ -32,6 +32,7 @@ static void PlotFrameLine(const char *label, const Frame<float>* x, const int N)
 void Render_FM_Demod(Broadcast_FM_Demod& demod) {
     if (ImGui::Begin("FM Demodulator Controls")) {
         Render_FM_Demod_Controls(demod.GetControls());
+        ImGui::Text("Audio L-R Phase Error: %.2f rads", demod.GetAudioLMRPhaseError());
     }
     ImGui::End();
 
@@ -109,8 +110,8 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
             ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
             double xline_0 = 0;
-            double xline_1 = +(double)demod.GetDownsampledBasebandSampleRate()/2.0f;
-            double xline_2 = -(double)demod.GetDownsampledBasebandSampleRate()/2.0f;
+            double xline_1 = +(double)demod.GetFMInSampleRate()/2.0f;
+            double xline_2 = -(double)demod.GetFMInSampleRate()/2.0f;
             int line_id = 0;
             ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
@@ -121,13 +122,13 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
     }
     ImGui::End();
 
-    if (ImGui::Begin("Polyphase DS Spectrum")) {
-        if (ImPlot::BeginPlot("Polyphase Downsampled Baseband Spectrum")) {
-            auto x = demod.GetDownsampledBasebandMagnitudeSpectrum();
-            const float Fs = (float)demod.GetDownsampledBasebandSampleRate();
+    if (ImGui::Begin("FM Input Spectrum")) {
+        if (ImPlot::BeginPlot("FM Input Spectrum")) {
+            auto x = demod.GetFMInMagnitudeSpectrum();
+            const float Fs = (float)demod.GetFMInSampleRate();
             const int N = (int)x.size();
             auto range = ImPlotRange(-80, 20);
-            auto label = "Polyphase DS LPF";
+            auto label = "FM Input";
             const float xscale = Fs/(float)N;
             const float xstart = -Fs/2.0f;
 
@@ -144,115 +145,19 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
             ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::EndPlot();
         }
-        Render_Magnitude_Spectrum_Controls(demod.GetDownsampledBasebandMagnitudeSpectrumControls());
+        Render_Magnitude_Spectrum_Controls(demod.GetFMInputMagnitudeSpectrumControls());
     }
     ImGui::End();
 
-    if (ImGui::Begin("FM Demod Spectrum")) {
+    if (ImGui::Begin("FM Output Spectrum")) {
         Render_FM_Demod_Magnitude_Spectrum(
-            demod.GetSignalMagnitudeSpectrum(), 
-            (float)demod.GetSignalSampleRate(), 
+            demod.GetFMOutMagnitudeSpectrum(), 
+            (float)demod.GetFMOutSampleRate(), 
             demod.GetAnalogParams(),
             ImPlotRange(-100, -20), 
-            "FM Demod Spectrum"
+            "FM Out Spectrum"
         );
         Render_Magnitude_Spectrum_Controls(demod.GetSignalMagnitudeSpectrumControls());
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("RDS Spectrum")) {
-        if (ImPlot::BeginPlot("RDS Spectrum")) {
-            auto x = demod.GetRDSMagnitudeSpectrum();
-            const float Fs = (float)demod.GetSignalSampleRate();
-            const float Fc = (float)demod.GetAnalogParams().F_rds_bandwidth;
-            const int N = (int)x.size();
-            auto range = ImPlotRange(-140, 0);
-            auto label = "RDS Spectrum";
-            const float xscale = Fs/(float)N;
-            const float xstart = -Fs/2.0f;
-
-            const int alpha = 125;
-            const auto COL_RED   = ImColor(255,0,0,alpha);
-            const auto COL_GREEN = ImColor(0,125,0,alpha);
-            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
-
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
-            double xline_0 = 0;
-            double xline_1 = -Fc;
-            double xline_2 = +Fc;
-
-            int line_id = 0;
-            ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::EndPlot();
-        }
-        Render_Magnitude_Spectrum_Controls(demod.GetRDSMagnitudeSpectrumControls());
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("Audio L-R Spectrum")) {
-        if (ImPlot::BeginPlot("Audio L-R Spectrum")) {
-            auto x = demod.GetAudioLMRMagnitudeSpectrum();
-            const float Fs = (float)demod.GetSignalSampleRate();
-            const float Fc = (float)demod.GetAnalogParams().F_audio_lmr_bandwidth;
-            const int N = (int)x.size();
-            auto range = ImPlotRange(-140, 0);
-            auto label = "Audio L-R Spectrum";
-            const float xscale = Fs/(float)N;
-            const float xstart = -Fs/2.0f;
-
-            const int alpha = 125;
-            const auto COL_RED   = ImColor(255,0,0,alpha);
-            const auto COL_GREEN = ImColor(0,125,0,alpha);
-            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
-
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
-            double xline_0 = 0;
-            double xline_1 = -Fc;
-            double xline_2 = +Fc;
-
-            int line_id = 0;
-            ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::EndPlot();
-        }
-        Render_Magnitude_Spectrum_Controls(demod.GetAudioLMRMagnitudeSpectrumControls());
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("Audio L+R Spectrum")) {
-        if (ImPlot::BeginPlot("Audio L+R Spectrum")) {
-            auto x = demod.GetAudioLPRMagnitudeSpectrum();
-            const float Fs = (float)demod.GetSignalSampleRate();
-            const float Fc = (float)demod.GetAnalogParams().F_audio_lpr;
-            const int N = (int)x.size();
-            auto range = ImPlotRange(-140, 0);
-            auto label = "Audio L+R Spectrum";
-            const float xscale = Fs/(float)N;
-            const float xstart = -Fs/2.0f;
-
-            const int alpha = 125;
-            const auto COL_RED   = ImColor(255,0,0,alpha);
-            const auto COL_GREEN = ImColor(0,125,0,alpha);
-            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
-
-            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
-            double xline_0 = 0;
-            double xline_1 = -Fc;
-            double xline_2 = +Fc;
-
-            int line_id = 0;
-            ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
-            ImPlot::EndPlot();
-        }
-        Render_Magnitude_Spectrum_Controls(demod.GetAudioLPRMagnitudeSpectrumControls());
     }
     ImGui::End();
 
@@ -261,7 +166,7 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
             auto x0 = demod.GetPilotMagnitudeSpectrum();
             auto x1 = demod.GetPLLPilotMagnitudeSpectrum();
 
-            const float Fs = (float)demod.GetSignalSampleRate();
+            const float Fs = (float)demod.GetFMOutSampleRate();
             const float Fc = (float)demod.GetAnalogParams().F_pilot;
 
             const int N = (int)x0.size();
@@ -293,6 +198,102 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
         Render_Magnitude_Spectrum_Controls(demod.GetPLLPilotMagnitudeSpectrumControls());
     }
     ImGui::End();
+
+    if (ImGui::Begin("Audio L+R Spectrum")) {
+        if (ImPlot::BeginPlot("Audio L+R Spectrum")) {
+            auto x = demod.GetAudioLPRMagnitudeSpectrum();
+            const float Fs = (float)demod.GetAudioSampleRate();
+            const float Fc = (float)demod.GetAnalogParams().F_audio_lpr;
+            const int N = (int)x.size();
+            auto range = ImPlotRange(-140, 0);
+            auto label = "Audio L+R Spectrum";
+            const float xscale = Fs/(float)N;
+            const float xstart = -Fs/2.0f;
+
+            const int alpha = 125;
+            const auto COL_RED   = ImColor(255,0,0,alpha);
+            const auto COL_GREEN = ImColor(0,125,0,alpha);
+            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
+
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
+            double xline_0 = 0;
+            double xline_1 = -Fc;
+            double xline_2 = +Fc;
+
+            int line_id = 0;
+            ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::EndPlot();
+        }
+        Render_Magnitude_Spectrum_Controls(demod.GetAudioLPRMagnitudeSpectrumControls());
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Audio L-R Spectrum")) {
+        if (ImPlot::BeginPlot("Audio L-R Spectrum")) {
+            auto x = demod.GetAudioLMRMagnitudeSpectrum();
+            const float Fs = (float)demod.GetAudioSampleRate();
+            const float Fc = (float)demod.GetAnalogParams().F_audio_lmr_bandwidth;
+            const int N = (int)x.size();
+            auto range = ImPlotRange(-140, 0);
+            auto label = "Audio L-R Spectrum";
+            const float xscale = Fs/(float)N;
+            const float xstart = -Fs/2.0f;
+
+            const int alpha = 125;
+            const auto COL_RED   = ImColor(255,0,0,alpha);
+            const auto COL_GREEN = ImColor(0,125,0,alpha);
+            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
+
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
+            double xline_0 = 0;
+            double xline_1 = -Fc;
+            double xline_2 = +Fc;
+
+            int line_id = 0;
+            ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::EndPlot();
+        }
+        Render_Magnitude_Spectrum_Controls(demod.GetAudioLMRMagnitudeSpectrumControls());
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("RDS Spectrum")) {
+        if (ImPlot::BeginPlot("RDS Spectrum")) {
+            auto x = demod.GetRDSMagnitudeSpectrum();
+            const float Fs = (float)demod.GetRDSSampleRate();
+            const float Fc = (float)demod.GetAnalogParams().F_rds_bandwidth;
+            const int N = (int)x.size();
+            auto range = ImPlotRange(-140, 0);
+            auto label = "RDS Spectrum";
+            const float xscale = Fs/(float)N;
+            const float xstart = -Fs/2.0f;
+
+            const int alpha = 125;
+            const auto COL_RED   = ImColor(255,0,0,alpha);
+            const auto COL_GREEN = ImColor(0,125,0,alpha);
+            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
+
+            ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
+            ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
+            double xline_0 = 0;
+            double xline_1 = -Fc;
+            double xline_2 = +Fc;
+
+            int line_id = 0;
+            ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::EndPlot();
+        }
+        Render_Magnitude_Spectrum_Controls(demod.GetRDSMagnitudeSpectrumControls());
+    }
+    ImGui::End();
 }
 
 void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls) {
@@ -322,45 +323,76 @@ void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls) {
         ImGui::EndCombo();
     }
 
-    ImGui::SliderFloat("L-R gain", &controls.audio_stereo_mix_factor, 0.0f, 10.0f);
-    ImGui::Checkbox("L-R Denoise LPF", &controls.is_lmr_lpf);
-    ImGui::Checkbox("Pilot peak filter", &controls.is_pilot_tone_peak_filter);
-    ImGui::Checkbox("Calculate FFTs", &controls.is_calculate_fft);
+    ImGui::SliderFloat("L-R gain", &controls.audio_stereo_mix_factor, 0.0f, 5.0f);
+    ImGui::Checkbox("L-R Denoiser", &controls.is_audio_lmr_aggressive_lpf);
 }
 
 void Render_Magnitude_Spectrum_Controls(Calculate_FFT_Mag& calc) {
-    static auto GetLabel = [](Calculate_FFT_Mag::Mode mode) {
+    using Mode = Calculate_FFT_Mag::Mode;
+    using Trigger = Calculate_FFT_Mag::Trigger;
+
+    static 
+    auto GetModeLabel = [](Mode mode) {
         switch (mode) {
-        case Calculate_FFT_Mag::Mode::NORMAL:   return "Normal";
-        case Calculate_FFT_Mag::Mode::AVERAGE:  return "Average";
-        case Calculate_FFT_Mag::Mode::MAX_HOLD: return "Max Hold";
+        case Mode::NORMAL:   return "Normal";
+        case Mode::AVERAGE:  return "Average";
+        case Mode::MAX_HOLD: return "Max Hold";
         default:                                return "Unknown";
         }
     };
 
-    auto curr_mode = calc.GetMode();
-    auto* preview_label = GetLabel(curr_mode);
+    static
+    auto GetTriggerLabel = [](Trigger trigger) {
+        switch (trigger) {
+        case Trigger::ALWAYS: return "Always";
+        case Trigger::SINGLE: return "Single";
+        default:                                 return "Unknown";
+        }
+    };
 
-    static auto RenderMode = [](Calculate_FFT_Mag::Mode mode, Calculate_FFT_Mag::Mode curr_mode, Calculate_FFT_Mag& calc) {
-        auto* label = GetLabel(mode);
+    // If we are rendering the spectrum raise the single update flag
+    calc.RaiseSingleTrigger();
+    const auto curr_mode = calc.GetMode();
+    const auto curr_trig = calc.GetTrigger();
+    auto* mode_label = GetModeLabel(curr_mode);
+    auto* trig_label = GetTriggerLabel(curr_trig);
+
+    static 
+    auto RenderMode = [](Mode mode, Mode curr_mode, Calculate_FFT_Mag& calc) {
+        auto* label = GetModeLabel(mode);
         const bool is_selected = (mode == curr_mode);
         if (ImGui::Selectable(label, is_selected)) {
             calc.SetMode(mode);
         }
     };
 
+    static 
+    auto RenderTrigger = [](Trigger trig, Trigger curr_trig, Calculate_FFT_Mag& calc) {
+        auto* label = GetTriggerLabel(trig);
+        const bool is_selected = (trig == curr_trig);
+        if (ImGui::Selectable(label, is_selected)) {
+            calc.SetTrigger(trig);
+        }
+    };
+
     ImGui::PushID((void*)(&calc));
-    if (ImGui::BeginCombo("Mode", preview_label)) {
-        RenderMode(Calculate_FFT_Mag::Mode::NORMAL, curr_mode, calc);
-        RenderMode(Calculate_FFT_Mag::Mode::AVERAGE, curr_mode, calc);
-        RenderMode(Calculate_FFT_Mag::Mode::MAX_HOLD, curr_mode, calc);
+    if (ImGui::BeginCombo("Mode", mode_label)) {
+        RenderMode(Mode::NORMAL, curr_mode, calc);
+        RenderMode(Mode::AVERAGE, curr_mode, calc);
+        RenderMode(Mode::MAX_HOLD, curr_mode, calc);
         ImGui::EndCombo();
     }
 
-    const bool is_average = (curr_mode == Calculate_FFT_Mag::Mode::AVERAGE);
+    const bool is_average = (curr_mode == Mode::AVERAGE);
     if (is_average) {
         auto& v = calc.GetAverageBeta();
         ImGui::SliderFloat("Update Beta", &v, 0.0f, 1.0f);
+    }
+
+    if (ImGui::BeginCombo("Trigger", trig_label)) {
+        RenderTrigger(Trigger::SINGLE, curr_trig, calc);
+        RenderTrigger(Trigger::ALWAYS, curr_trig, calc);
+        ImGui::EndCombo();
     }
     ImGui::PopID();
 }
@@ -423,7 +455,7 @@ void Render_FM_Demod_Other_Plots(Broadcast_FM_Demod& demod) {
     if (ImGui::Begin("IQ Signal")) {
         if (ImPlot::BeginPlot("IQ Signal")) {
             auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetIQSignal();
+            auto x = demod.GetFMOutIQ();
             auto label = "IQ Signal";
             ImPlot::SetupAxes("Sample", "Amplitude");
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
@@ -438,7 +470,7 @@ void Render_FM_Demod_Audio_Plots(Broadcast_FM_Demod& demod) {
     if (ImGui::Begin("Audio Output")) {
         if (ImPlot::BeginPlot("Audio Output")) {
             auto range = ImPlotRange(-1.0f, 1.0f);
-            auto x = demod.GetStereoOut();
+            auto x = demod.GetAudioOut();
             auto label = "Audio Output";
             ImPlot::SetupAxes("Sample", "Amplitude");
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
@@ -455,7 +487,7 @@ void Render_FM_Demod_Audio_Plots(Broadcast_FM_Demod& demod) {
             auto label = "Audio L+R";
             ImPlot::SetupAxes("Sample", "Amplitude");
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
+            ImPlot::PlotLine(label, x.data(), (int)x.size());
             ImPlot::EndPlot();
         }
     }
@@ -468,7 +500,7 @@ void Render_FM_Demod_Audio_Plots(Broadcast_FM_Demod& demod) {
             auto label = "Audio L-R";
             ImPlot::SetupAxes("Sample", "Amplitude");
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
-            PlotComplexLine(label, x.data(), (int)x.size());
+            ImPlot::PlotLine(label, x.data(), (int)x.size());
             ImPlot::EndPlot();
         }
     }
@@ -479,11 +511,6 @@ void Render_FM_Demod_RDS_Plots(Broadcast_FM_Demod& demod) {
     if (ImGui::Begin("RDS Signal")) {
         PlotConstellationSubplot(demod.GetRDSOutput(), "###RDS Signal");
     }
-    ImGui::End();
-
-    if (ImGui::Begin("RDS Downsampled")) {
-        PlotConstellationSubplot(demod.Get_RDS_Downsampled_Output(), "###RDS Downsampled");
-    };
     ImGui::End();
 
     if (ImGui::Begin("RDS Raw Output Symbols")) {
