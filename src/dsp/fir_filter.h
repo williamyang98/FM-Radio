@@ -82,3 +82,13 @@ private:
 
 #undef _min
 #undef _max
+
+#include "simd/f32_cum_mul.h"
+float FIR_Filter<float>::apply_filter(const float* x) {
+    return f32_cum_mul_auto(x, b.data(), K);
+}
+
+#include "simd/c32_f32_cum_mul.h"
+std::complex<float> FIR_Filter<std::complex<float>>::apply_filter(const std::complex<float>* x) {
+    return c32_f32_cum_mul_auto(x, b.data(), K);
+}

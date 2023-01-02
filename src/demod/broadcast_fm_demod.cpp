@@ -1,14 +1,15 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <fftw3.h>
 #include <algorithm>
 
 #include "broadcast_fm_demod.h"
-#include <fftw3.h>
 #include "dsp/filter_designer.h"
 #include "dsp/calculate_fft.h"
 #include "dsp/hilbert_fft_transform.h"
 #include "dsp/fftshift.h"
 #include "dsp/clamp.h"
+#include "dsp/simd/apply_harmonic_pll.h"
 
 #include "demod/bpsk_synchroniser.h"
 
@@ -156,7 +157,7 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     // fm_out -> [hilbert_transform] -> fm_out_iq
     {
         const int N = filt_cfg.order_fir_hilbert;
-        filt_hilbert_transform = std::make_unique<Hilbert_FIR_Filter>(N);
+        filt_hilbert_transform = std::make_unique<Hilbert_FIR_Filter<float>>(N);
     }
 
 
@@ -376,15 +377,10 @@ void Broadcast_FM_Demod::ExtractComponents() {
 
     // 2. Extract audio L-R component
     // fm_out_iq -> [pll*2] -> [phase_correct] -> temp_pll
-    for (size_t i = 0; i < N_pilot; i++) {
-        // harmonic mixer
-        const float dt = pll_dt_buf[i];
-        const float dt0 = dt*harmonic_audio_lmr;
-        // phase correction
-        const float dt1 = dt0 + audio_lmr_phase_error;
-        auto pll = GetPhasor(dt1);
-        temp_pll_buf[i] = fm_out_iq_buf[i] * pll;
-    }
+    apply_harmonic_pll_auto(
+        pll_dt_buf.data(), fm_out_iq_buf.data(), temp_pll_buf.data(),
+        (int)N_pilot,
+        harmonic_audio_lmr, audio_lmr_phase_error);
     // temp_pll -> [poly_ds_lpf] -> temp_audio
     if (!controls.is_audio_lmr_aggressive_lpf) {
         ProcessPolyrateFilter<std::complex<float>>(filt_poly_ds_lpf_audio_lmr.get(), temp_pll_buf, temp_audio_buf);
@@ -427,12 +423,11 @@ void Broadcast_FM_Demod::ExtractComponents() {
 
     // 3. Extract RDS component
     // fm_out_iq -> [pll*3] -> temp_pll
-    for (size_t i = 0; i < N_pilot; i++) {
-        const float dt = pll_dt_buf[i];
-        const float dt_c = dt * harmonic_rds;
-        auto pll = GetPhasor(dt_c);
-        temp_pll_buf[i] = fm_out_iq_buf[i] * pll;
-    }
+    apply_harmonic_pll_auto(
+        pll_dt_buf.data(), fm_out_iq_buf.data(), temp_pll_buf.data(),
+        (int)N_pilot,
+        harmonic_rds, 0.0f
+    );
     // temp_pll -> [poly_ds_lpf] -> rds
     ProcessPolyrateFilter<std::complex<float>>(filt_poly_ds_lpf_rds.get(), temp_pll_buf, rds_buf);
     // FFT

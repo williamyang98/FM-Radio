@@ -121,7 +121,7 @@ private:
     std::unique_ptr<PolyphaseDownsampler<std::complex<float>>> filt_poly_ds_lpf_fm_in;
     std::unique_ptr<FM_Demod> fm_demod;
     std::unique_ptr<PolyphaseDownsampler<float>> filt_poly_ds_lpf_fm_out;
-    std::unique_ptr<Hilbert_FIR_Filter> filt_hilbert_transform;
+    std::unique_ptr<Hilbert_FIR_Filter<float>> filt_hilbert_transform;
     // 2. Lock onto pilot tone
     std::unique_ptr<IIR_Filter<std::complex<float>>> filt_iir_peak_pilot;
     std::unique_ptr<IIR_Filter<float>> filt_iir_lpf_pll_phase_error;

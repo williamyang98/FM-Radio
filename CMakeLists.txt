@@ -53,8 +53,7 @@ set(DSP_DIR ${SRC_DIR}/dsp)
 add_library(dsp_lib STATIC
     ${DSP_DIR}/filter_designer.cpp
     ${DSP_DIR}/calculate_fft.cpp
-    ${DSP_DIR}/calculate_fft_mag.cpp
-    ${DSP_DIR}/hilbert_fir_filter.cpp)
+    ${DSP_DIR}/calculate_fft_mag.cpp)
 set_target_properties(dsp_lib PROPERTIES CXX_STANDARD 17)
 target_include_directories(dsp_lib PRIVATE ${DSP_LIB} ${SRC_DIR})
 target_link_libraries(dsp_lib PRIVATE ${FFTW3_LIBS})

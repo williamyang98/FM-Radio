@@ -179,3 +179,13 @@ private:
 
 #undef _min
 #undef _max
+
+#include "simd/f32_cum_mul.h"
+float PolyphaseDownsampler<float>::apply_filter(const float* x) {
+    return f32_cum_mul_auto(x, b.data(), NN);
+}
+
+#include "simd/c32_f32_cum_mul.h"
+std::complex<float> PolyphaseDownsampler<std::complex<float>>::apply_filter(const std::complex<float>* x) {
+    return c32_f32_cum_mul_auto(x, b.data(), NN);
+}
