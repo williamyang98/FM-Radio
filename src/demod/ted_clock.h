@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dsp/filters.h"
+#include "dsp/integrator.h"
 
 // timing error detector clock
 class TED_Clock 

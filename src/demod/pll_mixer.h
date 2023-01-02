@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dsp/filters.h"
+#include "dsp/integrator.h"
 #include <complex>
 
 // Creates a local oscillator whose frequency and phase depends on the phase_error

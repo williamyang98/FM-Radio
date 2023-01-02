@@ -3,7 +3,10 @@
 #include <memory>
 #include <complex>
 
-#include "dsp/filters.h"
+#include "dsp/iir_filter.h"
+#include "dsp/fir_filter.h"
+#include "dsp/integrator.h"
+#include "dsp/agc.h"
 #include "dsp/polyphase_filter.h"
 #include "dsp/calculate_fft_mag.h"
 #include "dsp/hilbert_fir_filter.h"

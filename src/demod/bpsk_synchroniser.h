@@ -3,7 +3,8 @@
 #include <memory>
 #include <complex>
 
-#include "dsp/filters.h"
+#include "dsp/integrator.h"
+#include "dsp/iir_filter.h"
 
 #include "demod/zero_crossing_detector.h"
 #include "demod/trigger_cooldown.h"
