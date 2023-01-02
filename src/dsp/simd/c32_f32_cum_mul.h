@@ -74,6 +74,8 @@ std::complex<float> c32_f32_cum_mul_ssse3(const std::complex<float>* x0, const f
 #endif
 
 #if defined(_DSP_AVX2)
+// TODO: Something is seriously wrong with this
+//       Causes L1 cache to be seriously hosed
 static inline
 std::complex<float> c32_f32_cum_mul_avx2(const std::complex<float>* x0, const float* x1, const int N)
 {
@@ -98,7 +100,6 @@ std::complex<float> c32_f32_cum_mul_avx2(const std::complex<float>* x0, const fl
         cpx256_t b0;
         b0.ps = _mm256_load_ps(&x1[i*K]);
 
-        // TODO: Optimise this, makes everything slow
         // [a0 a0 a1 a1 a2 a2 a3 a3]
         cpx256_t b1;
         b1.m128[0] = _mm_permute_ps(b0.m128[0], PERMUTE_LOWER);
@@ -142,10 +143,8 @@ inline static
 std::complex<float> c32_f32_cum_mul_auto(const std::complex<float>* x0, const float* x1, const int N) {
     #if defined(_DSP_AVX2)
     // return c32_f32_cum_mul_avx2(x0, x1, N);
-    // NOTE: The extra instructions to permute the f32 array to do component-wise
-    //       multiplication slows everything down
-    //       This occurs because we need to work around the fact _mm256_permute works on
-    //       two 128bit lanes, not the entire 256bit lane
+    // NOTE: Intel Vtuner shows that this causes the L1 cache to get hosed
+    //       Loads blocked by store forwarding
     return c32_f32_cum_mul_ssse3(x0, x1, N);
     #elif defined(_DSP_SSSE3)
     return c32_f32_cum_mul_ssse3(x0, x1, N);
