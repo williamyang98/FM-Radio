@@ -66,6 +66,7 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     lpf_ds_rds_factor = 8;      // 16kHz
     lpf_ds_audio_factor = 4;    // 32kHz
 
+    // TODO: Make baseband frequency user configurable
     Fs_baseband = 1024000;
     Fs_fm_in = Fs_baseband/lpf_ds_fm_in_factor;    
     Fs_fm_out = Fs_fm_in/lpf_ds_fm_out_factor;
@@ -158,6 +159,30 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     }
     // OPTIONAL: fm_out -> [iir_lpf] -> fm_out
     {
+        // In FM demodulation we take the derivative of the signal's phase wrt time
+        // m(t) = message signal
+        // phi_n(t) = phase noise
+        // s(t) = exp(Wd*integrate(m(t),t) + phi_n(t))
+        //
+        // arg(t) = arg(s(t)) = Wd*integrate(m(t),t) + phi_n(t)
+        // y(t) = fm demodulator output
+        // y(t) = d/dt arg(t) 
+        // y(t) = Wd*m(t) + d/dt phi_n(t)
+        //
+        // Let phi_n(t) = exp(j*wn*t)
+        // y(t) = Wd*m(t) + wn*exp(j*wn*t)
+        // 
+        // Thus we see that higher frequency phase noise is amplified by the FM demodulator
+        // This rises by +20dB/decade
+        //
+        // In order to compensate for this some broadcasters will emphasise the high frequencies of the message signal
+        // Then on the receiving end we deemphasis these higher frequencies to mitigate the effect of emphasis
+        // The end result is that the SNR across all frequencies ends up being constant instead of being +20dB/decade
+        // 
+        // The deemphasis filter is implemented as a first order Butterworth filter which has a rolloff of -20dB/decade
+        // Broadcasters which use emphasis on modulation use a cutoff frequency determined by Fc=1/(2*pi*T)
+        // Where T is given in microseconds
+        // European standards have cutoffs of: 25us, 50us, 75us (varies)
         const int N = TOTAL_TAPS_IIR_SINGLE_POLE_LPF;
         auto& filt = filt_iir_lpf_fm_deemphasis;
         filt = std::make_unique<IIR_Filter<float>>(N);
