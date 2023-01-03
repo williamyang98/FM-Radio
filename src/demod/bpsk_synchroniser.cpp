@@ -23,22 +23,26 @@ BPSK_Synchroniser::BPSK_Synchroniser(const int _block_size)
     
     // TED loop filter
     {
+        const int N = 2;
+        auto& filt = filt_iir_lpf_ted_phase_error;
+        filt = std::make_unique<IIR_Filter<float>>(N);
+
         const float Fs = (float)cfg.F_sample_rate;
         const float Fc = cfg.ted_max_freq_offset;
         const float k = Fc/(Fs/2.0f);
-        auto* res = create_iir_single_pole_lpf(k);
-        filt_iir_lpf_ted_phase_error = std::make_unique<IIR_Filter<float>>(res->b, res->a, res->N);
-        delete res;
+        create_iir_single_pole_lpf(filt->get_b(), filt->get_a(), k);
     }
 
     // PLL loop filter
     {
+        const int N = 2;
+        auto& filt = filt_iir_lpf_pll_phase_error;
+        filt = std::make_unique<IIR_Filter<float>>(N);
+
         const float Fs = (float)cfg.F_sample_rate;
         const float Fc = cfg.pll_max_freq_offset;
         const float k = Fc/(Fs/2.0f);
-        auto* res = create_iir_single_pole_lpf(k);
-        filt_iir_lpf_pll_phase_error = std::make_unique<IIR_Filter<float>>(res->b, res->a, res->N);
-        delete res;
+        create_iir_single_pole_lpf(filt->get_b(), filt->get_a(), k);
     }
 
     // Setup control loop

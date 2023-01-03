@@ -1,8 +1,8 @@
 #pragma once
 
 #include "utility/aligned_vector.h"
+#include "filter_designer.h"
 #include <complex>
-#include <cmath>
 
 #define _min(A,B) (A > B) ? B : A
 #define _max(A,B) (A > B) ? A : B
@@ -11,7 +11,7 @@
 template <typename T>
 class Hilbert_FIR_Filter 
 {
-public:
+private:
     const int K;
     AlignedVector<float> b;
     AlignedVector<T> xn;
@@ -21,23 +21,7 @@ public:
     : K(_K), 
       b(_K), xn(_K), tmp(_K)
     {
-        // Generate the Hilbert filter
-        // Given by the non-causal equation 
-        // n != 0 : 2/(n*pi) * sin(n*pi/2)^2 
-        // n  = 0 : 0
-        const int M = (K-1)/2;
-        for (int i = 0; i < K; i++) {
-            const int n = i-M;
-            if (n == 0) {
-                b[i] = 0.0f;
-            } else {
-                constexpr float PI = (float)M_PI;
-                // NOTE: time reverse coefficients here
-                const float _n = -(float)n;  
-                const float _a = std::sin(_n*PI/2.0f);
-                b[i] = 2.0f/(_n*PI) * _a * _a;
-            }
-        }
+        create_fir_hilbert(b.data(), K);
 
         for (int i = 0; i < K; i++) {
             xn[i] = 0;

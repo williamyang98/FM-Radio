@@ -4,21 +4,25 @@
 template <typename T>
 class IIR_Filter
 {
-public:
+private:
     const int K;
     AlignedVector<float> b;
     AlignedVector<float> a;
     AlignedVector<T> xn;
     AlignedVector<T> yn;
 public:
-    IIR_Filter(const float* _b, const float* _a, const int _K) 
+    float* get_b() const { return b.data(); }
+    float* get_a() const { return a.data(); }
+    int    get_K() const { return K; }
+public:
+    IIR_Filter(const int _K) 
     : K(_K),
       b(K), a(K),
       xn(K), yn(K)
     {
         for (int i = 0; i < K; i++) {
-            b[i] = _b[(K-1)-i];
-            a[i] = -_a[(K-1)-i]; // NOTE: Sign is inverted from filter designer
+            b[i] = 0;
+            a[i] = 0; 
             xn[i] = 0;
             yn[i] = 0;
         }
@@ -29,7 +33,6 @@ public:
         // y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] + ...
         //                + a1*y[n-1] + a2*y[n-2] + ...
         // Therefore we ignore the calculation of a0*y[n] which is not used
-        a[K-1] = 0;
         yn[K-1] = 0;
     }
 
@@ -59,7 +62,7 @@ private:
         T y; 
         y = 0;
         for (int i = 0; i < K; i++) {
-            y += (xn[i]*b[i] + yn[i]*a[i]);
+            y += (xn[i]*b[i] - yn[i]*a[i]);
         }
         return y;
     }

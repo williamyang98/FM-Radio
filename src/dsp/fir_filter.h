@@ -7,22 +7,22 @@
 template <typename T>
 class FIR_Filter 
 {
-public:
+private:
     const int K;
     AlignedVector<float> b;
     AlignedVector<T> xn;
     AlignedVector<T> tmp;
 public:
-    FIR_Filter(const float* _b, const int _K) 
+    float* get_b() const { return b.data(); }
+    int    get_K() const { return K; }
+public:
+    FIR_Filter(const int _K) 
     : K(_K), b(_K), xn(_K), tmp(_K)
     {
-        // time reverse the filter
         for (int i = 0; i < K; i++) {
-            b[i] = _b[(K-1)-i];
-        }
-
-        for (int i = 0; i < K; i++) {
+            b[i] = 0;
             xn[i] = 0;
+            tmp[i] = 0;
         }
     }
 

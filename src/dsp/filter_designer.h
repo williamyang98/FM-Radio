@@ -1,36 +1,24 @@
 #pragma once
 
-struct FIR_Filter_Res {
-    float* b;
-    const int N;
-    FIR_Filter_Res(const int _N): N(_N) 
-    {
-        b = new float[N];
-    }
-    ~FIR_Filter_Res() {
-        delete [] b;
-    }    
-};
+// Create an FIR filter with N taps
+// b is a vector of length N
+// k = Fc/(Fs/2)
+void create_fir_lpf(float* b, const int N, const float k);
+void create_fir_hpf(float* b, const int N, const float k);
+void create_fir_bpf(float* b, const int N, const float k1, const float k2);
 
-struct IIR_Filter_Res 
-{
-    float* a;
-    float* b;
-    const int N;
-    IIR_Filter_Res(const int _N): N(_N) 
-    {
-        a = new float[N];
-        b = new float[N];
-    }
-    ~IIR_Filter_Res() {
-        delete [] a;
-        delete [] b;
-    }    
-};
+// Create a IIR single order buttworth LPF with 2 taps
+// b, a are vectors of length 2 
+// k = Fc/(Fs/2)
+void create_iir_single_pole_lpf(float* b, float* a, const float k);
 
-FIR_Filter_Res* create_fir_lpf(const float k, const int M);
-FIR_Filter_Res* create_fir_hpf(const float k, const int M);
-FIR_Filter_Res* create_fir_bpf(const float k1, const float k2, const int M);
-IIR_Filter_Res* create_iir_single_pole_lpf(const float k);
-IIR_Filter_Res* create_iir_notch_filter(const float k, const float r);
-IIR_Filter_Res* create_iir_peak_filter(const float k, const float r);
+// Create a IIR second order peak/notch filter with 3 taps
+// b, a are vectors of length 3
+// k = Fc/(Fs/2)
+void create_iir_notch_filter(float* b, float* a, const float k, const float r);
+void create_iir_peak_filter(float* b, float* a, const float k, const float r);
+
+// Create an FIR Hilbert filter with N taps
+// b is a vector of length N
+// For best results N should be odd
+void create_fir_hilbert(float* b, const int N);

@@ -132,27 +132,29 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     // 1. FM demodulation
     // baseband -> [poly_ds_lpf] -> fm_in
     if (Fs_baseband != Fs_fm_in) {
-        const float Fs = (float)Fs_baseband;
-        const float Fc = (float)Fs_fm_in/2.0f;
-        const float k = Fc/(Fs/2.0f) * DOWNSAMPLING_ROLLOFF_FACTOR;
         const int N = filt_cfg.order_poly_ds_lpf_fm_out;
         const int M = lpf_ds_fm_in_factor;
         const int K = N/M;
-        auto* res = create_fir_lpf(k, N-1);
-        filt_poly_ds_lpf_fm_in = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(res->b, M, K);
-        delete res;
+        auto& filt = filt_poly_ds_lpf_fm_in;
+        filt = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
+
+        const float Fs = (float)Fs_baseband;
+        const float Fc = (float)Fs_fm_in/2.0f;
+        const float k = Fc/(Fs/2.0f) * DOWNSAMPLING_ROLLOFF_FACTOR;
+        create_fir_lpf(filt->get_b(), filt->get_K(), k);
     }
     // fm_in -> [fm_demodulator] -> fm_demod -> [poly_ds_lpf] -> fm_out
     if (Fs_fm_in != Fs_fm_out) {
-        const float Fs = (float)Fs_fm_in;
-        const float Fc = (float)Fs_fm_out/2.0f;
-        const float k = Fc/(Fs/2.0f) * DOWNSAMPLING_ROLLOFF_FACTOR;
         const int N = filt_cfg.order_poly_ds_lpf_fm_out;
         const int M = lpf_ds_fm_out_factor;
         const int K = N/M;
-        auto* res = create_fir_lpf(k, N-1);
-        filt_poly_ds_lpf_fm_out = std::make_unique<PolyphaseDownsampler<float>>(res->b, M, K);
-        delete res;
+        auto& filt = filt_poly_ds_lpf_fm_out;
+        filt = std::make_unique<PolyphaseDownsampler<float>>(M, K);
+
+        const float Fs = (float)Fs_fm_in;
+        const float Fc = (float)Fs_fm_out/2.0f;
+        const float k = Fc/(Fs/2.0f) * DOWNSAMPLING_ROLLOFF_FACTOR;
+        create_fir_lpf(filt->get_b(), filt->get_K(), k);
     }
     // fm_out -> [hilbert_transform] -> fm_out_iq
     {
@@ -164,22 +166,26 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     // 2. Lock onto pilot tone
     // fm_out_iq -> [iir_peak] -> pilot
     {
+        const int N = 3;
+        auto& filt = filt_iir_peak_pilot;
+        filt = std::make_unique<IIR_Filter<std::complex<float>>>(N);
+
         const float Fs = (float)Fs_fm_out;
         const float Fc = (float)params.F_pilot;
         const float k = Fc/(Fs/2.0f);
         const float r = 0.9999f;
-        auto* res = create_iir_peak_filter(k, r);
-        filt_iir_peak_pilot = std::make_unique<IIR_Filter<std::complex<float>>>(res->b, res->a, res->N);
-        delete res;
+        create_iir_peak_filter(filt->get_b(), filt->get_a(), k, r);
     }
     // PLL loop filter
     {
+        const int N = 2;
+        auto& filt = filt_iir_lpf_pll_phase_error;
+        filt = std::make_unique<IIR_Filter<float>>(N);
+
         const float Fs = (float)Fs_fm_out;
         const float Fc = (float)params.F_pilot_deviation;
         const float k = Fc/(Fs/2.0f);
-        auto* res = create_iir_single_pole_lpf(k);
-        filt_iir_lpf_pll_phase_error = std::make_unique<IIR_Filter<float>>(res->b, res->a, res->N);
-        delete res;
+        create_iir_single_pole_lpf(filt->get_b(), filt->get_a(), k);
     }
     // Setup PLL control loop and fractional mixer
     {
@@ -197,48 +203,50 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     // 3. Extract components
     // fm_out_iq -> [poly_ds_lpf] -> temp_audio -> [extract_real] -> audio_lpr
     if (Fs_fm_out != Fs_audio) {
-        const float Fs = (float)Fs_fm_out;
-        const float Fc = (float)params.F_audio_lpr;
-        const float k = Fc/(Fs/2.0f);
         const int N = filt_cfg.order_poly_ds_lpf_audio;
         const int M = lpf_ds_audio_factor;
         const int K = N/M;
-        auto* res = create_fir_lpf(k, N-1);
-        filt_poly_ds_lpf_audio_lpr = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(res->b, M, K);
-        delete res;
+        auto& filt = filt_poly_ds_lpf_audio_lpr;
+        filt = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
+
+        const float Fs = (float)Fs_fm_out;
+        const float Fc = (float)params.F_audio_lpr;
+        const float k = Fc/(Fs/2.0f);
+        create_fir_lpf(filt->get_b(), filt->get_K(), k);
     }
     // fm_out_iq -> [pll*2] -> temp_pll -> [poly_ds_lpf] -> temp_audio -> [phase_correct] -> [extract_real] -> audio_lmr
     if (Fs_fm_out != Fs_audio) {
         // Regular filter
-        const float Fs = (float)Fs_fm_out;
-        const float Fc = (float)params.F_audio_lmr_bandwidth;
-        const float k = Fc/(Fs/2.0f);
         const int N = filt_cfg.order_poly_ds_lpf_audio;
         const int M = lpf_ds_audio_factor;
         const int K = N/M;
+        auto& filt0 = filt_poly_ds_lpf_audio_lmr;
+        auto& filt1 = filt_poly_ds_lpf_audio_lmr_aggressive;
+        filt0 = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
+        filt1 = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
 
-        auto* res = create_fir_lpf(k, N-1);
-        filt_poly_ds_lpf_audio_lmr = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(res->b, M, K);
-        delete res;
+        const float Fs = (float)Fs_fm_out;
+        const float Fc = (float)params.F_audio_lmr_bandwidth;
+        const float k = Fc/(Fs/2.0f);
+        create_fir_lpf(filt0->get_b(), filt0->get_K(), k);
 
         // Aggressive filtering of L-R component if it is noisy
         const float R = filt_cfg.fir_lpf_lmr_denoise_factor;
         const float k_aggressive = k*R;
-        auto* res_aggressive = create_fir_lpf(k_aggressive, N-1);
-        filt_poly_ds_lpf_audio_lmr_aggressive = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(res_aggressive->b, M, K);
-        delete res_aggressive;
+        create_fir_lpf(filt1->get_b(), filt1->get_K(), k_aggressive);
     }
     // fm_out_iq -> [pll*3] -> temp_pll -> [poly_ds_lpf] -> rds 
     if (Fs_fm_out != Fs_rds) {
-        const float Fs = (float)Fs_fm_out;
-        const float Fc = (float)params.F_rds_bandwidth;
-        const float k = Fc/(Fs/2.0f);
         const int N = filt_cfg.order_poly_ds_lpf_rds;
         const int M = lpf_ds_rds_factor;
         const int K = N/M;
-        auto* res = create_fir_lpf(k, N-1);
-        filt_poly_ds_lpf_rds = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(res->b, M, K);
-        delete res;
+        auto& filt = filt_poly_ds_lpf_rds;
+        filt = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
+
+        const float Fs = (float)Fs_fm_out;
+        const float Fc = (float)params.F_rds_bandwidth;
+        const float k = Fc/(Fs/2.0f);
+        create_fir_lpf(filt->get_b(), filt->get_K(), k);
     }
     // phase correction of audio L-R component
     {

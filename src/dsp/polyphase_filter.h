@@ -14,18 +14,18 @@ private:
     AlignedVector<float> b;
     AlignedVector<T> xn;
 public:
+    float* get_b() const { return b.data(); }
+    int    get_K() const { return NN; }
+public:
     // b = FIR filter with M*K coefficients
     // M = downsampling factor and total phases 
     // K = total coefficients per phase
-    PolyphaseDownsampler(const float *_b, const int _M, const int _K) 
+    PolyphaseDownsampler(const int _M, const int _K) 
     : M(_M), K(_K), NN(_M*_K),
       b(NN), xn(NN)
      {
         for (int i = 0; i < NN; i++) {
-            b[i] = _b[(NN-1)-i];
-        }
-
-        for (int i = 0; i < NN; i++) {
+            b[i] = 0;
             xn[i] = 0;
         }
     }
@@ -100,6 +100,7 @@ public:
     : L(_L), K(_K), NN(_L*_K),
       b(NN), xn(K)
     {
+        // TODO: Determine if we can use filter designer without repacking coefficients
         for (int phase = 0; phase < L; phase++) {
             const int phase_c = (L-1)-phase;
             for (int i = 0; i < K; i++) {
