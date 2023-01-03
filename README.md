@@ -7,7 +7,9 @@ An implementation of a FM demodulator that supports
 
 ![Screenshot](docs/window_screenshot.png)
 
-As much of the internal state of the demodulator is shown for academic purposes. This program is intended to be an educational tool. A proper implementation would include SIMD acceleration for DSP and reduce the amount of internal state made available for viewing.
+As much of the internal state of the demodulator is shown for academic purposes. This program is intended to be an educational tool. 
+
+SIMD is employed to improve DSP performance on x86 processors. 
 
 ## Instructions
 1. Download program from releases page.
