@@ -22,3 +22,7 @@ void create_iir_peak_filter(float* b, float* a, const float k, const float r);
 // b is a vector of length N
 // For best results N should be odd
 void create_fir_hilbert(float* b, const int N);
+
+constexpr int TOTAL_TAPS_IIR_SINGLE_POLE_LPF = 2;
+constexpr int TOTAL_TAPS_IIR_SECOND_ORDER_NOTCH_FILTER = 3;
+constexpr int TOTAL_TAPS_IIR_SECOND_ORDER_PEAK_FILTER = 3;

@@ -62,7 +62,7 @@ private:
         T y; 
         y = 0;
         for (int i = 0; i < K; i++) {
-            y += (xn[i]*b[i] - yn[i]*a[i]);
+            y += (xn[i]*b[i] + yn[i]*a[i]);
         }
         return y;
     }
