@@ -7,7 +7,7 @@
 template <typename T>
 class FIR_Filter 
 {
-private:
+protected:
     const int K;
     AlignedVector<float> b;
     AlignedVector<T> xn;
@@ -53,7 +53,7 @@ public:
         push_values(tmp.data(), N-M1);
     }
 
-private:
+protected:
     void push_value(T x) {
         for (int i = 0; i < (K-1); i++) {
             xn[i] = xn[i+1];
