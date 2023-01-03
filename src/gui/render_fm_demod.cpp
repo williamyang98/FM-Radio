@@ -9,7 +9,7 @@
 #include "render_util.h"
 #include "render_bpsk_sync.h"
 
-void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls);
+void Render_FM_Demod_Controls(Broadcast_FM_Demod& demod);
 void Render_FM_Demod_Other_Plots(Broadcast_FM_Demod& demod);
 void Render_FM_Demod_Audio_Plots(Broadcast_FM_Demod& demod);
 void Render_FM_Demod_RDS_Plots(Broadcast_FM_Demod& demod);
@@ -31,7 +31,7 @@ static void PlotFrameLine(const char *label, const Frame<float>* x, const int N)
 
 void Render_FM_Demod(Broadcast_FM_Demod& demod) {
     if (ImGui::Begin("FM Demodulator Controls")) {
-        Render_FM_Demod_Controls(demod.GetControls());
+        Render_FM_Demod_Controls(demod);
         ImGui::Text("Audio L-R Phase Error: %.2f rads", demod.GetAudioLMRPhaseError());
     }
     ImGui::End();
@@ -92,6 +92,8 @@ void Render_FM_Demod(Broadcast_FM_Demod& demod) {
 }
 
 void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
+    auto& controls = demod.GetControls();
+
     if (ImGui::Begin("Baseband Spectrum")) {
         if (ImPlot::BeginPlot("Baseband Spectrum")) {
             auto x = demod.GetBasebandMagnitudeSpectrum();
@@ -213,18 +215,20 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
             const int alpha = 125;
             const auto COL_RED   = ImColor(255,0,0,alpha);
             const auto COL_GREEN = ImColor(0,125,0,alpha);
-            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
+            const auto COL_BLUE  = ImColor(0,0,255,alpha);
 
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
             ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
             double xline_0 = 0;
             double xline_1 = -Fc;
             double xline_2 = +Fc;
+            double xline_3 = (float)controls.filt_audio_lpr_cutoff.GetValue();
 
             int line_id = 0;
             ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_3, COL_BLUE, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::EndPlot();
         }
         Render_Magnitude_Spectrum_Controls(demod.GetAudioLPRMagnitudeSpectrumControls());
@@ -245,18 +249,20 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
             const int alpha = 125;
             const auto COL_RED   = ImColor(255,0,0,alpha);
             const auto COL_GREEN = ImColor(0,125,0,alpha);
-            // const auto COL_BLUE  = ImColor(0,0,255,alpha);
+            const auto COL_BLUE  = ImColor(0,0,255,alpha);
 
             ImPlot::SetupAxisLimits(ImAxis_Y1, range.Min, range.Max, ImPlotCond_Once);
             ImPlot::PlotLine(label, x.data(), (int)x.size(), xscale, xstart);
             double xline_0 = 0;
             double xline_1 = -Fc;
             double xline_2 = +Fc;
+            double xline_3 = (float)controls.filt_audio_lmr_cutoff.GetValue();
 
             int line_id = 0;
             ImPlot::DragLineX(line_id++, &xline_0, COL_RED, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::DragLineX(line_id++, &xline_1, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::DragLineX(line_id++, &xline_2, COL_GREEN, 1.0f, ImPlotDragToolFlags_NoInputs);
+            ImPlot::DragLineX(line_id++, &xline_3, COL_BLUE, 1.0f, ImPlotDragToolFlags_NoInputs);
             ImPlot::EndPlot();
         }
         Render_Magnitude_Spectrum_Controls(demod.GetAudioLMRMagnitudeSpectrumControls());
@@ -296,7 +302,10 @@ void Render_FM_Demod_Spectrums(Broadcast_FM_Demod& demod) {
     ImGui::End();
 }
 
-void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls) {
+void Render_FM_Demod_Controls(Broadcast_FM_Demod& demod) {
+    auto& controls = demod.GetControls();
+    auto& params = demod.GetAnalogParams();
+
     using AudioOut = Broadcast_FM_Demod_Controls::AudioOut;
     static auto GetOutputLabel = [](AudioOut mode) {
         switch (mode) {
@@ -322,9 +331,45 @@ void Render_FM_Demod_Controls(Broadcast_FM_Demod_Controls& controls) {
         RenderOutputSelectable(AudioOut::LMR);
         ImGui::EndCombo();
     }
-
     ImGui::SliderFloat("L-R gain", &controls.audio_stereo_mix_factor, 0.0f, 5.0f);
-    ImGui::Checkbox("L-R Denoiser", &controls.is_audio_lmr_aggressive_lpf);
+
+    {
+        auto& c = controls.filt_audio_lmr_cutoff;
+        int v = c.GetValue();
+        const int v_min = 0;
+        const int v_max = params.F_audio_lmr_bandwidth;
+        const auto flags = ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput;
+        if (ImGui::SliderInt("L-R cutoff", &v, v_min, v_max, "%d", flags)) {
+            c.SetValue(v);
+        }
+    }
+
+    {
+        auto& c = controls.filt_audio_lpr_cutoff;
+        int v = c.GetValue();
+        const int v_min = 0;
+        const int v_max = params.F_audio_lpr;
+        const auto flags = ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput;
+        if (ImGui::SliderInt("L+R cutoff", &v, v_min, v_max, "%d", flags)) {
+            c.SetValue(v);
+        }
+    }
+
+    ImGui::Checkbox("Use deemphasis filter", &controls.is_use_deemphasis_filter);
+    {
+        const bool is_disabled = !controls.is_use_deemphasis_filter;
+        auto& c = controls.filt_deemphasis_cutoff;
+        int v = c.GetValue();
+        const int v_min = params.Tus_min_deemphasis;
+        const int v_max = params.Tus_max_deemphasis;
+        const auto flags = ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput;
+
+        if (is_disabled) ImGui::BeginDisabled();
+        if (ImGui::SliderInt("Deemphasis cutoff (us)", &v, v_min, v_max, "%d", flags)) {
+            c.SetValue(v);
+        }
+        if (is_disabled) ImGui::EndDisabled();
+    }
 }
 
 void Render_Magnitude_Spectrum_Controls(Calculate_FFT_Mag& calc) {

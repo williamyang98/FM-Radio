@@ -156,6 +156,15 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         const float k = Fc/(Fs/2.0f) * DOWNSAMPLING_ROLLOFF_FACTOR;
         create_fir_lpf(filt->get_b(), filt->get_K(), k);
     }
+    // OPTIONAL: fm_out -> [iir_lpf] -> fm_out
+    {
+        const int N = TOTAL_TAPS_IIR_SINGLE_POLE_LPF;
+        auto& filt = filt_iir_lpf_fm_deemphasis;
+        filt = std::make_unique<IIR_Filter<float>>(N);
+
+        // NOTE: Filter coefficients initialised later
+        controls.filt_deemphasis_cutoff.SetValue(params.Tus_min_deemphasis);
+    }
     // fm_out -> [hilbert_transform] -> fm_out_iq
     {
         const int N = filt_cfg.order_fir_hilbert;
@@ -166,7 +175,7 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     // 2. Lock onto pilot tone
     // fm_out_iq -> [iir_peak] -> pilot
     {
-        const int N = 3;
+        const int N = TOTAL_TAPS_IIR_SECOND_ORDER_PEAK_FILTER;
         auto& filt = filt_iir_peak_pilot;
         filt = std::make_unique<IIR_Filter<std::complex<float>>>(N);
 
@@ -178,7 +187,7 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
     }
     // PLL loop filter
     {
-        const int N = 2;
+        const int N = TOTAL_TAPS_IIR_SINGLE_POLE_LPF;
         auto& filt = filt_iir_lpf_pll_phase_error;
         filt = std::make_unique<IIR_Filter<float>>(N);
 
@@ -209,10 +218,8 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         auto& filt = filt_poly_ds_lpf_audio_lpr;
         filt = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
 
-        const float Fs = (float)Fs_fm_out;
-        const float Fc = (float)params.F_audio_lpr;
-        const float k = Fc/(Fs/2.0f);
-        create_fir_lpf(filt->get_b(), filt->get_K(), k);
+        // NOTE: Filter coefficients initialised later
+        controls.filt_audio_lpr_cutoff.SetValue(params.F_audio_lpr);
     }
     // fm_out_iq -> [pll*2] -> temp_pll -> [poly_ds_lpf] -> temp_audio -> [phase_correct] -> [extract_real] -> audio_lmr
     if (Fs_fm_out != Fs_audio) {
@@ -220,20 +227,11 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         const int N = filt_cfg.order_poly_ds_lpf_audio;
         const int M = lpf_ds_audio_factor;
         const int K = N/M;
-        auto& filt0 = filt_poly_ds_lpf_audio_lmr;
-        auto& filt1 = filt_poly_ds_lpf_audio_lmr_aggressive;
-        filt0 = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
-        filt1 = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
+        auto& filt = filt_poly_ds_lpf_audio_lmr;
+        filt = std::make_unique<PolyphaseDownsampler<std::complex<float>>>(M, K);
 
-        const float Fs = (float)Fs_fm_out;
-        const float Fc = (float)params.F_audio_lmr_bandwidth;
-        const float k = Fc/(Fs/2.0f);
-        create_fir_lpf(filt0->get_b(), filt0->get_K(), k);
-
-        // Aggressive filtering of L-R component if it is noisy
-        const float R = filt_cfg.fir_lpf_lmr_denoise_factor;
-        const float k_aggressive = k*R;
-        create_fir_lpf(filt1->get_b(), filt1->get_K(), k_aggressive);
+        // NOTE: Filter coefficients initialised later
+        controls.filt_audio_lmr_cutoff.SetValue(params.F_audio_lmr_bandwidth);
     }
     // fm_out_iq -> [pll*3] -> temp_pll -> [poly_ds_lpf] -> rds 
     if (Fs_fm_out != Fs_rds) {
@@ -288,6 +286,10 @@ void Broadcast_FM_Demod::Process(tcb::span<const std::complex<float>> x)
         return;
     }
 
+    // We have user configurable filters
+    UpdateFilters();
+
+    // Demodulator chain
     Run_FM_Demodulate(x); 
     LockOntoPilot();
     ExtractComponents();
@@ -297,6 +299,67 @@ void Broadcast_FM_Demod::Process(tcb::span<const std::complex<float>> x)
     // Emit demodulator output
     obs_on_audio_block.Notify(audio_out_buf, Fs_audio);
     obs_on_rds_symbols.Notify(rds_pred_sym_buf.first(rds_total_symbols));
+}
+
+void Broadcast_FM_Demod::UpdateFilters() {
+    // Limit the normalised cutoff of a filter
+    constexpr float k_epsilon = 0.01f;
+    constexpr float k_min = 0.0f + k_epsilon;
+    constexpr float k_max = 1.0f - k_epsilon;
+
+    // FM output deemphasis filter
+    {
+        auto& c = controls.filt_deemphasis_cutoff;
+        if (c.IsDirty()) {
+            c.ClearDirty();
+            const int Tus = c.GetValue(); 
+            const float Tc = (float)Tus * 1e-6f;
+
+            const float Fs = (float)Fs_fm_out;
+            const float Fc = 1.0f/(2.0f*(float)M_PI*Tc);
+            float k = Fc/(Fs/2.0f);
+            k = clamp(k, k_min, k_max);
+
+            auto& filt = filt_iir_lpf_fm_deemphasis;
+            create_iir_single_pole_lpf(filt->get_b(), filt->get_a(), k);
+        }
+    }
+
+    // Audio L+R LPF
+    {
+        auto& c = controls.filt_audio_lpr_cutoff;
+        if (c.IsDirty()) {
+            c.ClearDirty();
+
+            const float Fs = (float)Fs_fm_out;
+            const float Fc = (float)c.GetValue();
+            float k = Fc/(Fs/2.0f);
+            k = clamp(k, k_min, k_max);
+
+            auto& filt = filt_poly_ds_lpf_audio_lpr;
+            if (filt) {
+                create_fir_lpf(filt->get_b(), filt->get_K(), k);
+            }
+        }
+    }
+
+    // Audio L-R LPF
+    {
+        auto& c = controls.filt_audio_lmr_cutoff;
+        if (c.IsDirty()) {
+            c.ClearDirty();
+
+            const float Fs = (float)Fs_fm_out;
+            const float Fc = (float)c.GetValue();
+            float k = Fc/(Fs/2.0f);
+            k = clamp(k, k_min, k_max);
+
+            auto& filt = filt_poly_ds_lpf_audio_lmr;
+            if (filt) {
+                create_fir_lpf(filt->get_b(), filt->get_K(), k);
+            }
+        }
+    }
 }
 
 void Broadcast_FM_Demod::Run_FM_Demodulate(tcb::span<const std::complex<float>> x) {
@@ -310,6 +373,11 @@ void Broadcast_FM_Demod::Run_FM_Demodulate(tcb::span<const std::complex<float>> 
 
     // fm_demod -> [poly_ds_lpf] -> fm_out
     ProcessPolyrateFilter<float>(filt_poly_ds_lpf_fm_out.get(), fm_demod_buf, fm_out_buf);
+
+    // OPTIONAL: fm_out -> [iir_lpf] -> fm_out
+    if (controls.is_use_deemphasis_filter) {
+        filt_iir_lpf_fm_deemphasis->process(fm_out_buf.data(), fm_out_buf.data(), (int)fm_out_buf.size());
+    }
 
     // fm_out -> [hilbert] -> fm_out_iq
     // HilbertFFTTransform(fm_out_buf, fm_out_iq_buf);
@@ -390,11 +458,7 @@ void Broadcast_FM_Demod::ExtractComponents() {
         (int)N_pilot,
         harmonic_audio_lmr, audio_lmr_phase_error);
     // temp_pll -> [poly_ds_lpf] -> temp_audio
-    if (!controls.is_audio_lmr_aggressive_lpf) {
-        ProcessPolyrateFilter<std::complex<float>>(filt_poly_ds_lpf_audio_lmr.get(), temp_pll_buf, temp_audio_buf);
-    } else {
-        ProcessPolyrateFilter<std::complex<float>>(filt_poly_ds_lpf_audio_lmr_aggressive.get(), temp_pll_buf, temp_audio_buf);
-    }
+    ProcessPolyrateFilter<std::complex<float>>(filt_poly_ds_lpf_audio_lmr.get(), temp_pll_buf, temp_audio_buf);
     // Estimate phase error against reference constellation along imaginary axis
     // TODO: We may still end up with a L-R output that is inverted (phase_shift = 180') 
     //       Originally we used a FIR filter so we could estimate the phase delay and 

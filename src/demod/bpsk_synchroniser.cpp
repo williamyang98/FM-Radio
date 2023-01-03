@@ -23,7 +23,7 @@ BPSK_Synchroniser::BPSK_Synchroniser(const int _block_size)
     
     // TED loop filter
     {
-        const int N = 2;
+        const int N = TOTAL_TAPS_IIR_SINGLE_POLE_LPF;
         auto& filt = filt_iir_lpf_ted_phase_error;
         filt = std::make_unique<IIR_Filter<float>>(N);
 
@@ -35,7 +35,7 @@ BPSK_Synchroniser::BPSK_Synchroniser(const int _block_size)
 
     // PLL loop filter
     {
-        const int N = 2;
+        const int N = TOTAL_TAPS_IIR_SINGLE_POLE_LPF;
         auto& filt = filt_iir_lpf_pll_phase_error;
         filt = std::make_unique<IIR_Filter<float>>(N);
 

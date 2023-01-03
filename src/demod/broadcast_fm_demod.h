@@ -22,7 +22,7 @@
 // Forward declare
 class BPSK_Synchroniser;
 
-// Parameters of the analogue transmission
+// Fixed parameters of the analogue transmission
 struct Broadcast_FM_Demod_Analog_Parameters {
     float F_wbfm_deviation = 75e3f;     // Deviation of WBFM signal
     int F_audio_lpr = 15000;
@@ -32,21 +32,26 @@ struct Broadcast_FM_Demod_Analog_Parameters {
     int F_audio_lmr_bandwidth = 15000;
     int F_rds_center = 57000;           // 3rd harmonic
     int F_rds_bandwidth = 2000;
+    // Number of us of deemphasis filter cutoff 
+    // Cutoff of filter starts at fc = 1/(2*pi*T)
+    int Tus_min_deemphasis = 1;              
+    int Tus_max_deemphasis = 100;              
 };
 
+// Fixed demodulator parameters
 struct Broadcast_FM_Demod_Config {
     // 1. FM demodulator
-    int order_poly_ds_lpf_fm_in = 32;
-    int order_poly_ds_lpf_fm_out = 32;
-    int order_fir_hilbert = 41;         // NOTE: This should be an ODD number for symmetry
+    int order_poly_ds_lpf_fm_in = 64;
+    int order_poly_ds_lpf_fm_out = 64;
+    int order_fir_hilbert = 64+1;         // NOTE: This should be an ODD number for symmetry
     // 2. Lock onto pilot
     struct {
         float integrator_gain = 0.1f;
         float proportional_gain = 0.01f;
     } pilot_pll;
     // 3. Extract components
-    int order_poly_ds_lpf_rds = 64;
-    int order_poly_ds_lpf_audio = 64;
+    int order_poly_ds_lpf_rds = 128;
+    int order_poly_ds_lpf_audio = 128;
     float fir_lpf_lmr_denoise_factor = 0.2f; // Amount of bandwidth of L-R to pass with aggressive filtering
     struct {
         float beta_update = 0.1f;            // Correct for phase offset in L-R audio
@@ -54,15 +59,32 @@ struct Broadcast_FM_Demod_Config {
     } audio_lmr_phase;
 };
 
+// Controllable demodulator parameters
 struct Broadcast_FM_Demod_Controls {
+    template <typename T>
+    struct EditableControl 
+    {
+    private:
+        bool is_dirty = false;
+        T value = 0;
+    public:
+        void SetValue(T v) { 
+            value = v; 
+            is_dirty = true;
+        }
+        void ClearDirty() { is_dirty = false; }
+        auto GetValue() const { return value; }
+        auto IsDirty() const { return is_dirty; }
+    };
     enum AudioOut { LPR, LMR, STEREO };
+
     AudioOut audio_out = AudioOut::STEREO;
     // Control how much the L-R gets mixed into L+R
     float audio_stereo_mix_factor = 1.0f;
-    // NOTE: Higher frequency components in FM are more susceptible to noise
-    //       This means the L-R component is quite abit noisier than our L+R component
-    //       This is a flag to optionally enable a more aggressive LPF
-    bool is_audio_lmr_aggressive_lpf = false;
+    bool is_use_deemphasis_filter = false;
+    EditableControl<int> filt_deemphasis_cutoff;    // us -> fc = 1/(2*pi*T)
+    EditableControl<int> filt_audio_lpr_cutoff;     // Hz
+    EditableControl<int> filt_audio_lmr_cutoff;     // Hz
 };
 
 class Broadcast_FM_Demod 
@@ -85,6 +107,7 @@ private:
     // baseband -> [poly_ds_lpf] -> fm_in
     // fm_in -> [fm_demodulator] -> fm_demod
     // fm_demod -> [poly_ds_lpf] -> fm_out
+    // OPTIONAL: fm_out -> [iir_lpf] -> fm_out
     // fm_out -> [hilbert_transform] -> fm_out_iq
 
     // 2. Lock onto pilot tone
@@ -100,7 +123,6 @@ private:
     // rds -> [ted + integrate/dump filter] -> tx_rds_symbols
 
     // 5. Audio mixing
-    // OPTIONAL: audio_lmr -> [fir_lpf] -> audio_lmr
     // (audio_lpr, audio_lmr) -> [mixer] -> audio_stereo_out
 
     // All downsampling factors/sample rates in demodulator
@@ -121,6 +143,7 @@ private:
     std::unique_ptr<PolyphaseDownsampler<std::complex<float>>> filt_poly_ds_lpf_fm_in;
     std::unique_ptr<FM_Demod> fm_demod;
     std::unique_ptr<PolyphaseDownsampler<float>> filt_poly_ds_lpf_fm_out;
+    std::unique_ptr<IIR_Filter<float>> filt_iir_lpf_fm_deemphasis;
     std::unique_ptr<Hilbert_FIR_Filter<float>> filt_hilbert_transform;
     // 2. Lock onto pilot tone
     std::unique_ptr<IIR_Filter<std::complex<float>>> filt_iir_peak_pilot;
@@ -134,7 +157,6 @@ private:
     // 3. Extract components
     std::unique_ptr<PolyphaseDownsampler<std::complex<float>>> filt_poly_ds_lpf_audio_lpr;
     std::unique_ptr<PolyphaseDownsampler<std::complex<float>>> filt_poly_ds_lpf_audio_lmr;
-    std::unique_ptr<PolyphaseDownsampler<std::complex<float>>> filt_poly_ds_lpf_audio_lmr_aggressive;
     std::unique_ptr<PolyphaseDownsampler<std::complex<float>>> filt_poly_ds_lpf_rds;
     float audio_lmr_phase_error;
     // 4. RDS synchronisation
@@ -207,6 +229,7 @@ public:
     ~Broadcast_FM_Demod();
     void Process(tcb::span<const std::complex<float>> x);
 private:
+    void UpdateFilters();
     void Run_FM_Demodulate(tcb::span<const std::complex<float>> x);
     void LockOntoPilot();
     void ExtractComponents();
