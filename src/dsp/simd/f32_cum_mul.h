@@ -17,6 +17,7 @@ float f32_cum_mul_scalar(const float* x0, const float* x1, const int N) {
 #include <immintrin.h>
 #include "simd_config.h"
 #include "data_packing.h"
+#include "f32_cum_sum.h"
 
 #if defined(_DSP_SSSE3)
 static inline
@@ -28,23 +29,22 @@ float f32_cum_mul_ssse3(const float* x0, const float* x1, const int N)
     const int K = 4;
     const int M = N/K;
 
+    cpx128_t v_sum;
+    v_sum.ps = _mm_set1_ps(0.0f);
+
     for (int i = 0; i < M; i++) {
         __m128 a0 = _mm_load_ps(&x0[i*K]);
         __m128 a1 = _mm_load_ps(&x1[i*K]);
-        cpx128_t b0;
-        b0.ps = _mm_mul_ps(a0, a1);
 
-        // Perform vectorised cumulative sum
-        // Shift half of vector and add. Repeat until we get the final sum
-        cpx128_t b1;
-
-        b1.i = _mm_srli_si128(b0.i, 2*sizeof(float));
-        b0.ps = _mm_add_ps(b0.ps, b1.ps);
-        b1.i = _mm_srli_si128(b0.i, 1*sizeof(float));
-        b0.ps = _mm_add_ps(b0.ps, b1.ps);
-
-        y += b0.f32[0];
+        // multiply accumulate
+        #if !defined(_DSP_FMA)
+        v_sum.ps = _mm_add_ps(_mm_mul_ps(a0, a1), v_sum.ps);
+        #else
+        v_sum.ps = _mm_fmadd_ps(a0, a1, v_sum.ps);
+        #endif
     }
+
+    y += f32_cum_sum_ssse3(v_sum);
 
     const int N_vector = M*K;
     const int N_remain = N-N_vector;
@@ -64,26 +64,22 @@ float f32_cum_mul_avx2(const float* x0, const float* x1, const int N)
     const int K = 8;
     const int M = N/K;
 
+    cpx256_t v_sum;
+    v_sum.ps = _mm256_set1_ps(0.0f);
+
     for (int i = 0; i < M; i++) {
         __m256 a0 = _mm256_load_ps(&x0[i*K]);
         __m256 a1 = _mm256_load_ps(&x1[i*K]);
-        cpx256_t b0;
-        b0.ps = _mm256_mul_ps(a0, a1);
 
-        // Perform vectorised cumulative sum
-        // Shift half of vector and add. Repeat until we get the final sum
-        cpx128_t c0;
-        cpx128_t c1;
-        // merge 128bit lanes
-        c0.ps = _mm_add_ps(b0.m128[0], b0.m128[1]);
-
-        c1.i = _mm_srli_si128(c0.i, 2*sizeof(float));
-        c0.ps = _mm_add_ps(c0.ps, c1.ps);
-        c1.i = _mm_srli_si128(c0.i, 1*sizeof(float));
-        c0.ps = _mm_add_ps(c0.ps, c1.ps);
-
-        y += c0.f32[0];
+        // multiply accumulate
+        #if !defined(_DSP_FMA)
+        v_sum.ps = _mm256_add_ps(_mm256_mul_ps(a0, a1), v_sum.ps);
+        #else
+        v_sum.ps = _mm256_fmadd_ps(a0, a1, v_sum.ps);
+        #endif
     }
+
+    y += f32_cum_sum_avx2(v_sum);
 
     const int N_vector = M*K;
     const int N_remain = N-N_vector;
