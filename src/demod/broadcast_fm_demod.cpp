@@ -208,7 +208,10 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         const float Fc = (float)params.F_pilot;
         const float k = Fc/(Fs/2.0f);
         const float r = 0.9999f;
-        create_iir_peak_filter(filt->get_b(), filt->get_a(), k, r);
+        create_iir_peak_1_filter(filt->get_b(), filt->get_a(), k, r);
+        // const float r = 0.9995f;
+        // const float A_db = 30.0f;
+        // create_iir_peak_2_filter(filt->get_b(), filt->get_a(), k, r, A_db);
     }
     // PLL loop filter
     {

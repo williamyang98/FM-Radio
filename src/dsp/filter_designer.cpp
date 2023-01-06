@@ -1,6 +1,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <assert.h>
+#include <complex>
 
 #include "filter_designer.h"
 
@@ -8,16 +9,19 @@ constexpr
 float PI = (float)M_PI;
 
 inline
+auto get_phasor(float x) {
+    return std::complex<float>(
+        std::cos(x),
+        std::sin(x)
+    );
+}
+
+inline
 float sinc(float x) {
     if (std::abs(x) <= 1e-6f) {
         return 1.0f;
     }
     return std::sin(PI*x)/(PI*x);
-}
-
-inline
-float calc_hamming_window(float x) {
-    return 0.54f - 0.46f*std::cos(x);
 }
 
 template <typename T>
@@ -33,6 +37,31 @@ public:
         return x[(N-1)-i];
     }
 };
+
+// Apply pre-warping to compensate for non-linear frequency mapping of bilinear transform
+float prewarp_normalised_frequency(const float Kd) {
+    // Consider the bilinear transform
+    // z = exp(sT)
+    // s = 1/T ln(z)
+    // s ≈ 2/T * (z-1)/(z+1)
+
+    // Wd = actual discrete filter frequency, Wa = the analog frequency we use in raw bilinear transform
+
+    // Hd(z) = Ha(s)
+    // Hd(exp(jwdT)) = Ha(2/T * (exp(jwdT)-1)/(exp(jwdT)+1))
+    // exp(jwdT) = 2/T * (exp(jwdT)-1)/(exp(jwdT)+1)
+    //           = 2/T * exp(jwdT/2)/exp(jwdT/2) * [exp(jwdT/2) - exp(-jwdT/2)]/[exp(jwdT/2) + exp(-jwdT/2)]
+    //           = 2/T * j * sin(wdT/2)cos(wdT/2)
+    //           = 2/T * j * tan(wd*T/2)
+    // wa = 2/T * tan(wd*T/2)
+    
+    // Wa = 2/T tan(Wd T/2)
+    // 2*pi*Fa = 2*Fs tan[(2*pi*Fd)/(2*Fs)]
+    // Fa/(Fs/2) = 2/pi tan[pi/2 * Fd/(Fs/2)]
+    // Ka = 2/pi tan(pi/2 * Kd)
+    const float Ka = 2.0f/PI * std::tan(PI/2.0f * Kd);
+    return Ka;
+}
 
 // For FIR filter design we consider two things
 // 1. The ideal brickwall response given by an infinite sinc(t) function in time domain
@@ -52,7 +81,7 @@ public:
 // Thus we pick a better window function apart from a rectangular window
 // The Hamming window in frequency domain has sidelobes of lower magnitude
 
-void create_fir_lpf(float* b, const int N, const float k) {
+void create_fir_lpf(float* b, const int N, const float k, const window_func_t window) {
     assert(b != NULL);
     assert(N > 0);
     assert(k < 1.0f);
@@ -64,7 +93,7 @@ void create_fir_lpf(float* b, const int N, const float k) {
         const float t0 = 2.0f*PI*(float)(i)/M;
         const float t1 = (float)i - M/2.0f;
 
-        const float h_window = calc_hamming_window(t0);
+        const float h_window = window(t0);
         // Brickwall response in frequency can be scaled
         // Using the scaling property of the Fourier transform
         // h(at) <--> Fourier <--> H(w/a)/|a| 
@@ -77,7 +106,7 @@ void create_fir_lpf(float* b, const int N, const float k) {
     }
 }
 
-void create_fir_hpf(float* b, const int N, const float k) {
+void create_fir_hpf(float* b, const int N, const float k, const window_func_t window) {
     assert(b != NULL);
     assert(N > 0);
     assert(k < 1.0f);
@@ -89,7 +118,7 @@ void create_fir_hpf(float* b, const int N, const float k) {
         const float t0 = 2*PI*(float)(i)/M;
         const float t1 = (float)(i) - M/2.0f;
 
-        const float h_window = calc_hamming_window(t0);
+        const float h_window = window(t0);
         // High pass filter is H_high(f) = 1-H_low(f) 
         // H_high(f) <--> Fourier <--> h_high(t)
         // H_high(f) <--> Fourier <--> sinc(t) - h_low(t)
@@ -99,7 +128,7 @@ void create_fir_hpf(float* b, const int N, const float k) {
     }
 }
 
-void create_fir_bpf(float* b, const int N, const float k1, const float k2) {
+void create_fir_bpf(float* b, const int N, const float k1, const float k2, const window_func_t window) {
     assert(b != NULL);
     assert(N > 0);
     assert(k2 > k1);
@@ -114,7 +143,7 @@ void create_fir_bpf(float* b, const int N, const float k1, const float k2) {
         const float t0 = 2*PI*(float)(i)/M;
         const float t1 = (float)(i) - M/2.0f;
 
-        const float h_window = calc_hamming_window(t0);
+        const float h_window = window(t0);
         // Bandpass filter is the subtraction of two low pass filters
         // H_band(f) = H_low_upper(f) - H_low_lower(f)
         // H_band(f) <--> Fourier <--> h_band(t)
@@ -131,14 +160,6 @@ void create_iir_single_pole_lpf(float* b, float* a, const float k) {
     assert(a != NULL);
     assert(k < 1.0f);
     assert(k > 0.0f);
-
-    // Apply pre-warping to compensate for non-linear frequency mapping of bilinear transform
-    // Wd = actual discrete filter frequency, Wa = the analog frequency we use in raw bilinear transform
-    // Wa = 2/T tan(Wd T/2)
-    // 2*pi*Fa = 2*Fs tan[(2*pi*Fd)/(2*Fs)]
-    // Fa/(Fs/2) = 2/pi tan[pi/2 * Fd/(Fs/2)]
-    // Ka = 2/pi tan(pi/2 * Kd)
-    const float k_warp = 2.0f/PI * std::tan(PI/2.0f * k);
 
     // Transfer function of analog single pole low pass filter
     // H(s) = 1/(1 + Tc*s)
@@ -161,6 +182,7 @@ void create_iir_single_pole_lpf(float* b, float* a, const float k) {
     // y[n] = 1/(1+2A)*x[n] +      1/(1+2A)*x[n-1]
     //                      - (1-2A)/(1+2A)*y[n-1]
 
+    const float k_warp = prewarp_normalised_frequency(k);
     const float A = 1.0f/(PI*k_warp);
     const float B0 = 1.0f + 2.0f*A;
     const float B1 = 1.0f - 2.0f*A;
@@ -206,29 +228,36 @@ void create_iir_notch_filter(float* b, float* a, const float k, const float r) {
     // H(z) = [z^2 - 2cos(wn)*z + 1] / [z^2 - 2rcos(wn)*z + r^2] 
     // H(z) = [1 - 2cos(wn)*z^-1 + z^-2] / [1 - 2rcos(wn)*z^-1 + (r^2)*z^-2]
 
-    // Normalise the response
-    // s = Fs/2
-    // k = 1
-    // w0 = pi
-    // z = exp(jw0) = exp(j*pi) = -1
-    // We expect |H(-1)| = 1
-    // |H(-1)| = [2 + 2cos(wn)] / [(1+r^2) + 2rcos(wn)]
-    // Scale by K = 1/|H(-1)|
-    // K = [1 + 2*r*cos(wn) + r^2] / [2 + 2cos(wn)]
     const float wn = PI*k;
     const float a0 = 2.0f*std::cos(wn);
-    const float K = (1.0f + r*a0 + r*r) / (2.0f + a0);
+    const float r2 = r*r;
 
-    _b[0] = K;
-    _b[1] = -K*a0;
-    _b[2] = K;
+    static auto H_z = [k,r](float k_z) {
+        // z = exp(sT) = exp(j*pi*k), k = Fc/(Fs/2)
+        const auto z = get_phasor(PI*k_z);
+        const auto z0 = get_phasor(+PI*k);
+        const auto z1 = get_phasor(-PI*k);
+        return ((z-z0)*(z-z1))/((z-r*z0)*(z-r*z1));
+    };
+
+    // Find a frequency which we normalise the magnitude to
+    const float k_z = (k > 0.5f) ? 0.0f : 1.0f;
+    const float K = 1.0f/std::abs(H_z(k_z));
+
+    _b[0] = 1.0f;
+    _b[1] = -a0;
+    _b[2] = 1.0f;
 
     _a[0] = 1.0f;
     _a[1] = a0*r;
-    _a[2] = -r*r;
+    _a[2] = -r2;
+
+    for (int i = 0; i < N; i++) {
+        _b[i] = K*_b[i];
+    }
 }
 
-void create_iir_peak_filter(float* b, float* a, const float k, const float r) {
+void create_iir_peak_1_filter(float* b, float* a, const float k, const float r) {
     assert(b != NULL);
     assert(a != NULL);
     assert(k < 1.0f);
@@ -240,59 +269,108 @@ void create_iir_peak_filter(float* b, float* a, const float k, const float r) {
     auto _b = ReverseArray(b, N);
     auto _a = ReverseArray(a, N);
 
-    // Take the response of the discrete notch filter and invert it
-    // H_peak(z) = 1-H_notch(z)
-    // H(z) = 1 - [1 - 2cos(wn)*z^-1 + z^-2] / [1 - 2rcos(wn)*z^-1 + (r^2)*z^-2]
-    // H(z) = [2cos(wn)*(1-r)*z^-1 + (r^2 - 1)*z^-2] / [1 - 2rcos(wn)*z^-1 + (r^2)*z^-2]
+    // Use exact z transform
+    // z = exp(sT), T = 1/Fs
+    // z = exp(j*w0*Ts)
+    // Let wn = w0*Ts = 2*pi*Fc/Fs
+    // k = Fc/(Fs/2) = 2Fc/Fs 
+    // wn = pi*k
 
-    // Normalise the response
-    // z0 = exp(jwn) 
-    // z1 = exp(-jwn)
-    // We expect |H(z0)| = K, |H(z1)| = K
-    // H(z) = [2cos(wn)*(1-r)*z + (r^2 - 1)] / [z^2 - 2rcos(wn)*z + (r^2)]
-    // |H(z0)| = [2cos(wn)*(1-r)*exp(+jwn) + (r^2-1)] / [exp(-jwn)^2 - 2rcos(wn)*exp(-jwn) + (r^2)]
-    // |H(z1)| = [2cos(wn)*(1-r)*exp(-jwn) + (r^2-1)] / [exp(+jwn)^2 - 2rcos(wn)*exp(+jwn) + (r^2)]
-    // |H(z0)*H(z1)| = |H(z0)|*|H(z1)| = 1*1 = 1
-
-    // Let H(z0)*H(z1) = [B0*B1]/[A0*A1] = B2/A2 = K^2
-
-    // B2 = [2cos(wn)*(1-r)]^2 + (r^2-1)^2 + 2cos(wn)*(1-r)*(r^2-1)*2cos(wn) 
-    // B2 = [2cos(wn)*(1-r)]^2 + (r^2-1)^2 + [2cos(wn)]^2 * (1-r)(r-1)(r+1)
-    // B2 = [2cos(wn)*(1-r)]^2 + (r^2-1)^2 - [2cos(wn)*(1-r)]^2 * (r+1)
-    // B2 = -r*[2cos(wn)*(1-r)]^2 + (r^2-1)^2
-
-    // A2 = [exp(-jwn)^2 - 2rcos(wn)*exp(-jwn) + r^2][exp(+jwn)^2 - 2rcos(wn)*exp(+jwn) + r^2]
-    // A2 = [exp(-jwn)^2 - r*[exp(+jwn)+exp(-jwn)]*exp(-jwn) + r^2][exp(+jwn)^2 - r*[exp(+jwn)+exp(-jwn)]*exp(+jwn) + r^2]
-    // A2 = [exp(-jwn)^2 - r*[1+exp(-jwn)^2] + r^2][exp(+jwn)^2 - r*[1+exp(+jwn)^2] + r^2]
-    // A2 = [(1-r)*exp(-jwn)^2 + r*(r-1)][(1-r)*exp(+jwn)^2 + r(r-1)]
-    // A2 = (1-r)^2 * [exp(-j2wn) - r] * [exp(+j2wn) - r]
-    // A2 = (1-r)^2 * [1 + r^2 - 2rcos(2wn)]
-
-    // |H(z0)*H(z1)| = B2/A2 = K^2 
-    // We want to scale by K' = 1/K 
-    // K' = 1/sqrt(B2/A2)
-    // K' = sqrt(A2/B2)
+    // Use pole placement
+    // H(z) = 1/[(z-r*exp(jwn))*(z-r*exp(-jwn))]
+    // H(z) = 1/[z^2 - 2*r*cos(wn)*z + (r^2)]
+    // H(z) = (z^-2)/[1 - 2*r*cos(wn)*z^-1 + (r^2)*z^-2]
 
     const float wn = PI*k;
     const float a0 = 2.0f*std::cos(wn);
-    const float a1 = 2.0f*std::cos(2*wn);
+    const float r2 = r*r;
 
-    const float A2 = (1-r)*(1-r)*(1 + r*r - r*a1);
-    const float B2 = -r*(a0*(1-r))*(a0*(1-r)) + (r*r-1)*(r*r-1);
-    const float K = std::sqrt(A2/B2);
+    static auto H_z = [k,r](float k_z) {
+        // z = exp(sT) = exp(j*pi*k), k = Fc/(Fs/2)
+        const auto z = get_phasor(PI*k_z);
+        const auto z0 = get_phasor(+PI*k);
+        const auto z1 = get_phasor(-PI*k);
+        return 1.0f/((z-r*z0)*(z-r*z1));
+    };
+
+    // Normalise to the peak frequency
+    const float K = 1.0f/std::abs(H_z(k));
 
     _b[0] = 0.0f;
-    _b[1] = K*a0*(1.0f-r);
-    _b[2] = K*(r*r - 1.0f);
+    _b[1] = 0.0f;
+    _b[2] = 1.0f;
 
     _a[0] = 1.0f;
-    _a[1] = a0*r;
-    _a[2] = -r*r;
+    _a[1] = r*a0;
+    _a[2] = -r2;
+
+    for (int i = 0; i < N; i++) {
+        _b[i] = K*_b[i];
+    }
+}
+
+void create_iir_peak_2_filter(float* b, float* a, const float k, const float r, const float A_db) {
+    assert(b != NULL);
+    assert(a != NULL);
+    assert(k < 1.0f);
+    assert(k > 0.0f);
+    assert(r < 1.0f);
+    assert(r > 0.0f);
+
+    const int N = TOTAL_TAPS_IIR_SECOND_ORDER_PEAK_FILTER;
+    auto _b = ReverseArray(b, N);
+    auto _a = ReverseArray(a, N);
+
+    // Use exact z transform
+    // z = exp(sT), T = 1/Fs
+    // z = exp(j*w0*Ts)
+    // Let wn = w0*Ts = 2*pi*Fc/Fs
+    // k = Fc/(Fs/2) = 2Fc/Fs 
+    // wn = pi*k
+
+    // Use zero and pole placement
+    // H(z) = [(z-r0*exp(jwn))*(z-r0*exp(-jwn))]/[(z-r1*exp(jwn))*(z-r1*exp(-jwn))]
+    // H(z) = [z^2 - 2*r0*cos(wn)*z + (r0^2)]/[z^2 - 2*r1*cos(wn)*z + (r1^2)]
+    // H(z) = [1 - 2*r0*cos(wn)*z^-1 + (r0^2)*z^-2]/[1 - 2*r1*cos(wn)*z^-1 + (r1^2)*z^-2]
+
+    const float A = std::pow(10.0f, A_db/20.0f);
+    const float rc = 1.0f-r;
+    const float rc_scale = rc*2.0f;
+    const float r0 = 1.0f - rc_scale; 
+    const float r1 = 1.0f - rc_scale/A;
+
+    const float wn = PI*k;
+    const float a0 = 2.0f*std::cos(wn);
+
+    static auto H_z = [k,r0,r1](float k_z) {
+        // z = exp(sT) = exp(j*pi*k), k = Fc/(Fs/2)
+        const auto z = get_phasor(PI*k_z);
+        const auto z0 = get_phasor(+PI*k);
+        const auto z1 = get_phasor(-PI*k);
+        return (z-r0*z0)*(z-r0*z1)/((z-r1*z0)*(z-r1*z1));
+    };
+
+    // Normalise to the peak frequency
+    const float K = 1.0f/std::abs(H_z(k));
+
+    _b[0] = 1.0f;
+    _b[1] = -r0*a0;
+    _b[2] = r0*r0;
+
+    _a[0] = 1.0f;
+    _a[1] = r1*a0;
+    _a[2] = -r1*r1;
+
+    for (int i = 0; i < N; i++) {
+        _b[i] = K*_b[i];
+    }
 }
 
 void create_fir_hilbert(float* b, const int N) {
     assert(b != NULL);
     assert(N > 0);
+
+    auto _b = ReverseArray(b, N);
 
     // Given by the non-causal equation 
     // n != 0 : 2/(n*pi) * sin(n*pi/2)^2 
@@ -300,14 +378,7 @@ void create_fir_hilbert(float* b, const int N) {
     const int M = (N-1)/2;
     for (int i = 0; i < N; i++) {
         const int n = i-M;
-        if (n == 0) {
-            b[i] = 0.0f;
-            continue;
-        }
-
-        // NOTE: time reverse coefficients here
-        const float _n = -(float)n;  
-        const float a0 = std::sin(_n*PI/2.0f);
-        b[i] = 2.0f/(_n*PI) * a0 * a0;
+        const bool is_even = (n % 2) == 0;
+        _b[i] = is_even ? 0.0f : 2.0f/(PI*(float)n);
     }
 }
