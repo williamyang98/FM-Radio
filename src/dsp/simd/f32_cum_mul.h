@@ -23,18 +23,18 @@ float f32_cum_mul_scalar(const float* x0, const float* x1, const int N) {
 static inline
 float f32_cum_mul_ssse3(const float* x0, const float* x1, const int N)
 {
-    float y = 0;
-
     // 128bits = 16bytes = 4*4bytes
     const int K = 4;
     const int M = N/K;
+    const int N_vector = M*K;
+    const int N_remain = N-N_vector;
 
     cpx128_t v_sum;
     v_sum.ps = _mm_set1_ps(0.0f);
 
-    for (int i = 0; i < M; i++) {
-        __m128 a0 = _mm_load_ps(&x0[i*K]);
-        __m128 a1 = _mm_load_ps(&x1[i*K]);
+    for (int i = 0; i < N_vector; i+=K) {
+        __m128 a0 = _mm_loadu_ps(&x0[i]);
+        __m128 a1 = _mm_loadu_ps(&x1[i]);
 
         // multiply accumulate
         #if !defined(_DSP_FMA)
@@ -44,12 +44,9 @@ float f32_cum_mul_ssse3(const float* x0, const float* x1, const int N)
         #endif
     }
 
+    float y = 0;
     y += f32_cum_sum_ssse3(v_sum);
-
-    const int N_vector = M*K;
-    const int N_remain = N-N_vector;
     y += f32_cum_mul_scalar(&x0[N_vector], &x1[N_vector], N_remain);
-
     return y;
 }
 #endif
@@ -58,18 +55,18 @@ float f32_cum_mul_ssse3(const float* x0, const float* x1, const int N)
 static inline
 float f32_cum_mul_avx2(const float* x0, const float* x1, const int N)
 {
-    float y = 0;
-
     // 256bits = 32bytes = 8*4bytes
     const int K = 8;
     const int M = N/K;
+    const int N_vector = M*K;
+    const int N_remain = N-N_vector;
 
     cpx256_t v_sum;
     v_sum.ps = _mm256_set1_ps(0.0f);
 
-    for (int i = 0; i < M; i++) {
-        __m256 a0 = _mm256_load_ps(&x0[i*K]);
-        __m256 a1 = _mm256_load_ps(&x1[i*K]);
+    for (int i = 0; i < N_vector; i+=K) {
+        __m256 a0 = _mm256_loadu_ps(&x0[i]);
+        __m256 a1 = _mm256_loadu_ps(&x1[i]);
 
         // multiply accumulate
         #if !defined(_DSP_FMA)
@@ -79,12 +76,9 @@ float f32_cum_mul_avx2(const float* x0, const float* x1, const int N)
         #endif
     }
 
+    float y = 0;
     y += f32_cum_sum_avx2(v_sum);
-
-    const int N_vector = M*K;
-    const int N_remain = N-N_vector;
     y += f32_cum_mul_scalar(&x0[N_vector], &x1[N_vector], N_remain);
-
     return y;
 }
 #endif

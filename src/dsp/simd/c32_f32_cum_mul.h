@@ -24,11 +24,11 @@ std::complex<float> c32_f32_cum_mul_scalar(const std::complex<float>* x0, const 
 static inline
 std::complex<float> c32_f32_cum_mul_ssse3(const std::complex<float>* x0, const float* x1, const int N)
 {
-    auto y = std::complex<float>(0,0);
-
     // 128bits = 16bytes = 4*4bytes
     constexpr int K = 4;
     const int M = N/K;
+    const int N_vector = M*K;
+    const int N_remain = N-N_vector;
 
     // [3 2 1 0] -> [3 3 2 2]
     const uint8_t PERMUTE_UPPER = 0b11111010;
@@ -38,14 +38,14 @@ std::complex<float> c32_f32_cum_mul_ssse3(const std::complex<float>* x0, const f
     cpx128_t v_sum;
     v_sum.ps = _mm_set1_ps(0.0f);
 
-    for (int i = 0; i < M; i++) {
+    for (int i = 0; i < N_vector; i+=K) {
         // [c0 c1]
-        __m128 a0 = _mm_load_ps(reinterpret_cast<const float*>(&x0[i*K]));
+        __m128 a0 = _mm_loadu_ps(reinterpret_cast<const float*>(&x0[i]));
         // [c2 c3]
-        __m128 a1 = _mm_load_ps(reinterpret_cast<const float*>(&x0[i*K + K/2]));
+        __m128 a1 = _mm_loadu_ps(reinterpret_cast<const float*>(&x0[i + K/2]));
 
         // [a0 a1 a2 a3]
-        __m128 b0 = _mm_load_ps(&x1[i*K]);
+        __m128 b0 = _mm_loadu_ps(&x1[i]);
         // [a2 a2 a3 a3]
         __m128 b1 = _mm_shuffle_ps(b0, b0, PERMUTE_UPPER);
         // [a0 a0 a1 a1]
@@ -61,12 +61,9 @@ std::complex<float> c32_f32_cum_mul_ssse3(const std::complex<float>* x0, const f
         #endif
     }
 
+    auto y = std::complex<float>(0,0);
     y += c32_cum_sum_ssse3(v_sum);
-
-    const int N_vector = M*K;
-    const int N_remain = N-N_vector;
     y += c32_f32_cum_mul_scalar(&x0[N_vector], &x1[N_vector], N_remain);
-
     return y;
 }
 #endif
@@ -75,11 +72,11 @@ std::complex<float> c32_f32_cum_mul_ssse3(const std::complex<float>* x0, const f
 static inline
 std::complex<float> c32_f32_cum_mul_avx2(const std::complex<float>* x0, const float* x1, const int N)
 {
-    auto y = std::complex<float>(0,0);
-
     // 256bits = 32bytes = 4*8bytes
     constexpr int K = 4;
     const int M = N/K;
+    const int N_vector = M*K;
+    const int N_remain = N-N_vector;
 
     // [3 2 1 0] -> [3 3 2 2]
     const uint8_t PERMUTE_UPPER = 0b11111010;
@@ -89,12 +86,12 @@ std::complex<float> c32_f32_cum_mul_avx2(const std::complex<float>* x0, const fl
     cpx256_t v_sum;
     v_sum.ps = _mm256_set1_ps(0.0f);
 
-    for (int i = 0; i < M; i++) {
+    for (int i = 0; i < N_vector; i+=K) {
         // [c0 c1 c2 c3]
-        __m256 a0 = _mm256_load_ps(reinterpret_cast<const float*>(&x0[i*K]));
+        __m256 a0 = _mm256_loadu_ps(reinterpret_cast<const float*>(&x0[i]));
 
         // [a0 a1 a2 a3]
-        __m128 b0 = _mm_load_ps(&x1[i*K]);
+        __m128 b0 = _mm_loadu_ps(&x1[i]);
         // [a2 a2 a3 a3]
         __m128 b1 = _mm_permute_ps(b0, PERMUTE_LOWER);
         // [a0 a0 a1 a1]
@@ -111,12 +108,9 @@ std::complex<float> c32_f32_cum_mul_avx2(const std::complex<float>* x0, const fl
         #endif
     }
 
+    auto y = std::complex<float>(0,0);
     y += c32_cum_sum_avx2(v_sum);
-
-    const int N_vector = M*K;
-    const int N_remain = N-N_vector;
     y += c32_f32_cum_mul_scalar(&x0[N_vector], &x1[N_vector], N_remain);
-
     return y;
 }
 #endif
