@@ -188,5 +188,6 @@ int main(int argc, char** argv) {
     // Setup gui
     auto renderer = Renderer(app, pa_devices, pa_output, device_selector);
     const int rv = RenderImguiSkeleton(&renderer);
+    init_command_thread.join();
     return rv;
 }
