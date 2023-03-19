@@ -1,6 +1,5 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
-#include <fftw3.h>
 #include <algorithm>
 #include <cstring>
 
