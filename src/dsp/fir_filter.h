@@ -54,6 +54,7 @@ public:
     }
 
 protected:
+    inline
     void push_value(T x) {
         for (int i = 0; i < (K-1); i++) {
             xn[i] = xn[i+1];
@@ -61,6 +62,7 @@ protected:
         xn[K-1] = x;
     }
 
+    inline
     void push_values(const T* x, const int N) {
         const int M = K-N;
         for (int i = 0; i < M; i++) {
@@ -71,6 +73,7 @@ protected:
         }
     }
 
+    inline
     T apply_filter(const T* x) {
         T y = 0;
         for (int i = 0; i < K; i++) {
@@ -84,11 +87,15 @@ protected:
 #undef _max
 
 #include "simd/f32_cum_mul.h"
+template <>
+inline
 float FIR_Filter<float>::apply_filter(const float* x) {
     return f32_cum_mul_auto(x, b.data(), K);
 }
 
 #include "simd/c32_f32_cum_mul.h"
+template <>
+inline
 std::complex<float> FIR_Filter<std::complex<float>>::apply_filter(const std::complex<float>* x) {
     return c32_f32_cum_mul_auto(x, b.data(), K);
 }

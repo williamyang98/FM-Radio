@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <vector>
+#include <cstring>
 
 typedef uint8_t programme_type_t; // 5bits
 typedef uint32_t freq_t;          // Hz to MHz

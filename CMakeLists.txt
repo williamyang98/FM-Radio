@@ -121,7 +121,8 @@ target_link_libraries(device_lib PRIVATE ${RTLSDR_LIBS} fmt)
 
 set(DEVICE_GUI_DIR ${SRC_DIR}/gui)
 add_library(device_gui_lib STATIC
-    ${DEVICE_GUI_DIR}/render_device_selector.cpp)
+    ${DEVICE_GUI_DIR}/render_device_selector.cpp
+    ${GUI_DIR}/imgui_extensions.cpp)
 set_target_properties(device_gui_lib PROPERTIES CXX_STANDARD 17)
 target_include_directories(device_gui_lib PRIVATE ${DEVICE_GUI_DIR} ${SRC_DIR})
 target_link_libraries(device_gui_lib PRIVATE ${RTLSDR_LIBS} device_lib imgui fmt)

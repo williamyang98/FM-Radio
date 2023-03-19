@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 // Clause 2.1: Baseband coding structure
 constexpr struct {

@@ -1,4 +1,7 @@
 # SDR FM Radio Demodulator
+![windows-build](https://github.com/FiendChain/FM-Radio/actions/workflows/windows.yml/badge.svg)
+![linux-build](https://github.com/FiendChain/FM-Radio/actions/workflows/linux.yml/badge.svg)
+
 ## Introduction
 An implementation of a FM demodulator that supports
 - Mono audio using L+R signal

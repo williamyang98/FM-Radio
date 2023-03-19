@@ -21,7 +21,7 @@ if "%4" == "--ignore-ref" set BUILD_REF="false"
 set ARGS=/p:CL_MPCOUNT=%NUMBER_OF_PROCESSORS% /m:%NUMBER_OF_PROCESSORS% /p:BuildProjectReferences=%BUILD_REF% /v:minimal /nologo 
 
 set PROJ_PATH="%3"
-if "%~3" == "" set PROJ_PATH="build\basic_radio_app.vcxproj" 
+if "%~3" == "" set PROJ_PATH="build\ALL_BUILD.vcxproj" 
 
 if /I "%2" == ""        call msbuild %PROJ_PATH% /p:Configuration=Release          %ARGS%
 if /I "%2" == "release" call msbuild %PROJ_PATH% /p:Configuration=Release          %ARGS%

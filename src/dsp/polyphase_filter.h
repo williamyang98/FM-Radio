@@ -63,6 +63,7 @@ public:
     }
 
 private:
+    inline
     void push_values(const T* x, const int N) {
         const int M = NN-N;
         for (int i = 0; i < M; i++) {
@@ -73,6 +74,7 @@ private:
         }
     }
 
+    inline
     T apply_filter(const T* x) {
         T y;
         y = 0;
@@ -150,6 +152,7 @@ public:
     }
 
 private:
+    inline
     void push_value(T x) {
         for (int i = 0; i < (K-1); i++) {
             xn[i] = xn[i+1];
@@ -157,6 +160,7 @@ private:
         xn[K-1] = x;
     }
 
+    inline
     void push_values(const T* x, const int N) {
         const int M = K-N;
         for (int i = 0; i < M; i++) {
@@ -167,6 +171,7 @@ private:
         }
     }
 
+    inline
     T apply_filter(const T* x, const int phase) {
         auto* b0 = &b[phase*K];
         T y; 
@@ -182,11 +187,15 @@ private:
 #undef _max
 
 #include "simd/f32_cum_mul.h"
+template <>
+inline
 float PolyphaseDownsampler<float>::apply_filter(const float* x) {
     return f32_cum_mul_auto(x, b.data(), NN);
 }
 
 #include "simd/c32_f32_cum_mul.h"
+template <>
+inline
 std::complex<float> PolyphaseDownsampler<std::complex<float>>::apply_filter(const std::complex<float>* x) {
     return c32_f32_cum_mul_auto(x, b.data(), NN);
 }

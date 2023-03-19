@@ -2,6 +2,7 @@
 #include <cmath>
 #include <fftw3.h>
 #include <algorithm>
+#include <cstring>
 
 #include "broadcast_fm_demod.h"
 #include "dsp/filter_designer.h"
