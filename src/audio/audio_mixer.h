@@ -18,7 +18,7 @@ private:
     const int block_size;
     std::mutex mutex_buffers;
 public:
-    AudioMixer(const int _block_size=2);
+    explicit AudioMixer(const int _block_size=2);
     std::shared_ptr<RingBuffer<Frame<float>>> CreateManagedBuffer(const int nb_blocks);
     tcb::span<Frame<float>> UpdateMixer();
     float& GetOutputGain() { return output_gain; };

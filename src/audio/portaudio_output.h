@@ -22,8 +22,8 @@ public:
 
     AudioMixer mixer;
 public:
-    PortAudio_Output(const int _sample_rate=48000);
-    virtual ~PortAudio_Output();
+    explicit PortAudio_Output(const int _sample_rate=48000);
+    ~PortAudio_Output();
     PortAudio_Output(PortAudio_Output&) = delete;
     PortAudio_Output(PortAudio_Output&&) = delete;
     PortAudio_Output& operator=(PortAudio_Output&) = delete;

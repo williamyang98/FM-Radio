@@ -36,13 +36,15 @@ private:
 public:
     Renderer(App& _app, PaDeviceList& _pa_devices, PortAudio_Output& _pa_output, DeviceSelector& _device_selector)
     : app(_app), pa_devices(_pa_devices), pa_output(_pa_output), device_selector(_device_selector) {}
-    virtual GLFWwindow* Create_GLFW_Window(void) {
+
+    GLFWwindow* Create_GLFW_Window() override {
         return glfwCreateWindow(
             1280, 720, 
             "Broadcast FM Demodulator", 
             NULL, NULL);
     }
-    virtual void AfterImguiContextInit() {
+
+    void AfterImguiContextInit() override {
         ImPlot::CreateContext();
         ImguiSkeleton::AfterImguiContextInit();
         auto& io = ImGui::GetIO();
@@ -58,7 +60,7 @@ public:
         ImGuiSetupCustomConfig();
     }
 
-    virtual void Render() {
+    void Render() override {
         if (ImGui::Begin("Our workspace")) {
             ImGui::DockSpace(ImGui::GetID("Our workspace"));
 
@@ -76,7 +78,8 @@ public:
         }
         ImGui::End();
     }
-    virtual void AfterShutdown() {
+
+    void AfterShutdown() override {
         ImPlot::DestroyContext();
     }
 };
@@ -100,7 +103,7 @@ uint32_t power_ceil(uint32_t x) {
 };
 
 int main(int argc, char** argv) {
-    uint32_t block_size = 65536;
+    int _block_size = 65536;
     const char* wr_filename = NULL;
 
     int opt; 
@@ -110,7 +113,7 @@ int main(int argc, char** argv) {
             wr_filename = optarg;
             break;
         case 'b':
-            block_size = (uint32_t)(atof(optarg));
+            _block_size = (int)(atof(optarg));
             break;
         case 'h':
         default:
@@ -119,11 +122,12 @@ int main(int argc, char** argv) {
         }
     }
 
-    block_size = power_ceil(block_size);
-    if (block_size <= 0) {
-        fprintf(stderr, "Block size must be positive (%d)\n", block_size); 
+    if (_block_size <= 0) {
+        fprintf(stderr, "Block size must be positive (%d)\n", _block_size);
         return 1;
     }
+
+    const uint32_t ceil_block_size = power_ceil((uint32_t)_block_size);
 
     FILE* fp_out = stdout;
     if (wr_filename != NULL) {
@@ -134,7 +138,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    fprintf(stderr, "Using a block size of %u\n", block_size);
+    fprintf(stderr, "Using a block size of %u\n", ceil_block_size);
 #ifdef _WIN32
     _setmode(_fileno(fp_out), _O_BINARY);
 #endif
@@ -160,7 +164,7 @@ int main(int argc, char** argv) {
     }
 
     // Setup fm demodulator
-    auto app = App(block_size);
+    auto app = App(ceil_block_size);
     app.OnAudioBlock().Attach([&pcm_player](tcb::span<const Frame<float>> x, int Fs) {
         pcm_player->SetInputSampleRate(Fs);
         pcm_player->ConsumeBuffer(x);

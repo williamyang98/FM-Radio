@@ -34,7 +34,7 @@ private:
     Observable<tcb::span<const float>> obs_on_rds_signal;
     Observable<tcb::span<const Frame<float>>, int> obs_on_audio_block;
 public:
-    App(const int _block_size);
+    explicit App(const int _block_size);
     ~App();
     size_t Process(tcb::span<const std::complex<uint8_t>> x);
 public:
