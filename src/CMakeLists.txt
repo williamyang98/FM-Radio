@@ -7,10 +7,15 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/audio)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/device)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/gui)
 
+if (NOT DEFINED RTLSDR_LIBS)
+    message(FATAL_ERROR "RTLSDR_LIBS must be defined")
+endif()
+
 set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR})
+
 set(GETOPT_DIR ${SRC_DIR}/utility/getopt)
 add_library(getopt STATIC ${GETOPT_DIR}/getopt.c)
-target_include_directories(getopt PRIVATE ${GETOPT_DIR})
+target_include_directories(getopt PUBLIC ${GETOPT_DIR})
 
 function(init_target target)
     target_compile_features(${target} PRIVATE cxx_std_17)
@@ -20,13 +25,6 @@ function(init_target target)
     target_link_libraries(${target} PRIVATE pthread)
     endif()
 endfunction()
-
-set(APP_DIR ${SRC_DIR})
-add_library(app_lib STATIC
-    ${APP_DIR}/app.cpp)
-target_include_directories(app_lib PRIVATE ${APP_DIR} ${SRC_DIR})
-target_link_libraries(app_lib PRIVATE dsp_lib fm_demod rds_decoder)
-init_target(app_lib)
 
 function(install_dlls target)
     if (WIN32)
@@ -40,6 +38,11 @@ function(install_dlls target)
         )
     endif()
 endfunction()
+
+add_library(app_lib STATIC ${SRC_DIR}/app.cpp)
+target_include_directories(app_lib PRIVATE ${SRC_DIR})
+target_link_libraries(app_lib PRIVATE dsp_lib fm_demod rds_decoder)
+init_target(app_lib)
 
 # Our application
 add_executable(fm_demod_benchmark ${SRC_DIR}/fm_demod_benchmark.cpp)
@@ -68,3 +71,9 @@ target_link_libraries(fm_demod_tuner PRIVATE
     device_lib device_gui ${RTLSDR_LIBS})
 init_target(fm_demod_tuner)
 install_dlls(fm_demod_tuner)
+
+add_executable(rtl_sdr ${SRC_DIR}/rtl_sdr.cpp)
+target_include_directories(rtl_sdr PRIVATE ${SRC_DIR})
+init_target(rtl_sdr)
+target_link_libraries(rtl_sdr PRIVATE ${RTLSDR_LIBS} getopt)
+install_dlls(rtl_sdr)
