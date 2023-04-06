@@ -3,4 +3,5 @@ build-*/
 build_*/
 data/
 *.ini
+*.zip
 .vscode/

@@ -50,11 +50,11 @@ jobs:
     - name: Copy files (Release)
       shell: bash
       run: |
-        mkdir -p ${{github.workspace}}/output
-        cp ${{github.workspace}}/build/src/Release/*.exe ${{github.workspace}}/output
-        cp ${{github.workspace}}/build/src/Release/*.dll ${{github.workspace}}/output
-        cp -rf ${{github.workspace}}/res ${{github.workspace}}/output
-        cp ${{github.workspace}}/README.md ${{github.workspace}}/output
+        mkdir -p ./output
+        cp ./build/src/Release/*.exe ./output
+        cp ./build/src/Release/*.dll ./output
+        cp -rf ./res ./output
+        cp ./README.md ./output
 
     - name: Upload files (Release)
       uses: actions/upload-artifact@v3
