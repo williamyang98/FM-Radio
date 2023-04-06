@@ -11,8 +11,8 @@
 #include "dsp/calculate_fft_mag.h"
 #include "dsp/hilbert_fir_filter.h"
 
-#include "demod/fm_demod.h"
-#include "demod/pll_mixer.h"
+#include "fm_demod.h"
+#include "pll_mixer.h"
 
 #include "audio/frame.h"
 

@@ -1,0 +1,71 @@
+#pragma once
+
+// TODO: Modify code to support ARM platforms like Raspberry PI using NEON
+#include <immintrin.h>
+#include "../dsp_config.h"
+#include "./data_packing.h"
+#include "./f32_cum_sum.h"
+
+#if defined(_DSP_SSSE3)
+static inline
+float f32_cum_mul_ssse3(const float* x0, const float* x1, const int N)
+{
+    // 128bits = 16bytes = 4*4bytes
+    const int K = 4;
+    const int M = N/K;
+    const int N_vector = M*K;
+    const int N_remain = N-N_vector;
+
+    cpx128_t v_sum;
+    v_sum.ps = _mm_set1_ps(0.0f);
+
+    for (int i = 0; i < N_vector; i+=K) {
+        __m128 a0 = _mm_loadu_ps(&x0[i]);
+        __m128 a1 = _mm_loadu_ps(&x1[i]);
+
+        // multiply accumulate
+        #if !defined(_DSP_FMA)
+        v_sum.ps = _mm_add_ps(_mm_mul_ps(a0, a1), v_sum.ps);
+        #else
+        v_sum.ps = _mm_fmadd_ps(a0, a1, v_sum.ps);
+        #endif
+    }
+
+    float y = 0;
+    y += f32_cum_sum_ssse3(v_sum);
+    y += f32_cum_mul_scalar(&x0[N_vector], &x1[N_vector], N_remain);
+    return y;
+}
+#endif
+
+#if defined(_DSP_AVX2)
+static inline
+float f32_cum_mul_avx2(const float* x0, const float* x1, const int N)
+{
+    // 256bits = 32bytes = 8*4bytes
+    const int K = 8;
+    const int M = N/K;
+    const int N_vector = M*K;
+    const int N_remain = N-N_vector;
+
+    cpx256_t v_sum;
+    v_sum.ps = _mm256_set1_ps(0.0f);
+
+    for (int i = 0; i < N_vector; i+=K) {
+        __m256 a0 = _mm256_loadu_ps(&x0[i]);
+        __m256 a1 = _mm256_loadu_ps(&x1[i]);
+
+        // multiply accumulate
+        #if !defined(_DSP_FMA)
+        v_sum.ps = _mm256_add_ps(_mm256_mul_ps(a0, a1), v_sum.ps);
+        #else
+        v_sum.ps = _mm256_fmadd_ps(a0, a1, v_sum.ps);
+        #endif
+    }
+
+    float y = 0;
+    y += f32_cum_sum_avx2(v_sum);
+    y += f32_cum_mul_scalar(&x0[N_vector], &x1[N_vector], N_remain);
+    return y;
+}
+#endif

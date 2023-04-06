@@ -1,5 +1,5 @@
 #pragma once
-#include "simd_config.h"
+#include "../dsp_config.h"
 #include <immintrin.h>
 #include <complex>
 

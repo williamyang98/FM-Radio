@@ -1,0 +1,63 @@
+name: x86-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master", "dev" ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  skip_check:
+    continue-on-error: false
+    runs-on: ubuntu-22.04
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+    - id: skip_check
+      uses: fkirc/skip-duplicate-actions@v5
+      with:
+        concurrent_skipping: 'same_content'
+        cancel_others: 'true'
+        skip_after_successful_duplicate: 'true'
+        paths_ignore: '["**/README.md", "**/docs/**", "**/LICENSE.txt", "toolchains/**"]'
+        do_not_skip: '["workflow_dispatch", "schedule"]'
+
+  build:
+    needs: skip_check
+    if: needs.skip_check.outputs.should_skip != 'true'
+
+    runs-on: windows-2022
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup vcpkg with caching
+      uses: friendlyanon/setup-vcpkg@v1
+      with: 
+        committish: c9f906558f9bb12ee9811d6edc98ec9255c6cda5
+        path: vcpkg
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE:STRING=${{github.workspace}}/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -A"x64" -G"Visual Studio 17 2022"
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Copy files (Release)
+      shell: bash
+      run: |
+        mkdir -p ${{github.workspace}}/output
+        cp ${{github.workspace}}/build/src/Release/*.exe ${{github.workspace}}/output
+        cp ${{github.workspace}}/build/src/Release/*.dll ${{github.workspace}}/output
+        cp -rf ${{github.workspace}}/res ${{github.workspace}}/output
+        cp ${{github.workspace}}/README.md ${{github.workspace}}/output
+
+    - name: Upload files (Release)
+      uses: actions/upload-artifact@v3
+      with:
+        name: fm_radio_windows_x64
+        path: ${{github.workspace}}/output

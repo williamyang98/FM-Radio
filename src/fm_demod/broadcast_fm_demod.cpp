@@ -4,6 +4,8 @@
 #include <cstring>
 
 #include "broadcast_fm_demod.h"
+#include "bpsk_synchroniser.h"
+
 #include "dsp/filter_designer.h"
 #include "dsp/calculate_fft.h"
 #include "dsp/hilbert_fft_transform.h"
@@ -11,7 +13,6 @@
 #include "dsp/clamp.h"
 #include "dsp/simd/apply_harmonic_pll.h"
 
-#include "demod/bpsk_synchroniser.h"
 
 inline static 
 std::complex<float> GetPhasor(float dt) { 

@@ -1,0 +1,70 @@
+cmake_minimum_required(VERSION 3.21)
+
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/dsp)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/fm_demod)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/rds_decoder)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/audio)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/device)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/gui)
+
+set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR})
+set(GETOPT_DIR ${SRC_DIR}/utility/getopt)
+add_library(getopt STATIC ${GETOPT_DIR}/getopt.c)
+target_include_directories(getopt PRIVATE ${GETOPT_DIR})
+
+function(init_target target)
+    target_compile_features(${target} PRIVATE cxx_std_17)
+    if(MSVC)
+    target_compile_options(${target} PRIVATE "/MP")
+    else()
+    target_link_libraries(${target} PRIVATE pthread)
+    endif()
+endfunction()
+
+set(APP_DIR ${SRC_DIR})
+add_library(app_lib STATIC
+    ${APP_DIR}/app.cpp)
+target_include_directories(app_lib PRIVATE ${APP_DIR} ${SRC_DIR})
+target_link_libraries(app_lib PRIVATE dsp_lib fm_demod rds_decoder)
+init_target(app_lib)
+
+function(install_dlls target)
+    if (WIN32)
+        add_custom_command(
+            TARGET ${target}
+            POST_BUILD 
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:${target}> 
+            $<TARGET_FILE_DIR:${target}>
+            COMMAND_EXPAND_LISTS
+        )
+    endif()
+endfunction()
+
+# Our application
+add_executable(fm_demod_benchmark ${SRC_DIR}/fm_demod_benchmark.cpp)
+target_include_directories(fm_demod_benchmark PRIVATE ${SRC_DIR})
+target_link_libraries(fm_demod_benchmark PRIVATE 
+    getopt app_lib)
+init_target(fm_demod_benchmark)
+
+add_executable(fm_demod_no_tuner ${SRC_DIR}/fm_demod_no_tuner.cpp)
+target_include_directories(fm_demod_no_tuner PRIVATE ${SRC_DIR})
+target_link_libraries(fm_demod_no_tuner PRIVATE 
+    getopt
+    imgui implot
+    app_lib app_gui
+    audio_lib ${PORTAUDIO_LIBS})
+init_target(fm_demod_no_tuner)
+install_dlls(fm_demod_no_tuner)
+
+add_executable(fm_demod_tuner ${SRC_DIR}/fm_demod_tuner.cpp)
+target_include_directories(fm_demod_tuner PRIVATE ${SRC_DIR})
+target_link_libraries(fm_demod_tuner PRIVATE 
+    getopt
+    imgui implot
+    app_lib app_gui
+    audio_lib ${PORTAUDIO_LIBS}
+    device_lib device_gui ${RTLSDR_LIBS})
+init_target(fm_demod_tuner)
+install_dlls(fm_demod_tuner)

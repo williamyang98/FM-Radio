@@ -1,5 +1,5 @@
 #include "app.h"
-#include "demod/broadcast_fm_demod.h"
+#include "fm_demod/broadcast_fm_demod.h"
 #include "rds_decoder/rds_init.h"
 #include "rds_decoder/differential_manchester_decoder.h"
 

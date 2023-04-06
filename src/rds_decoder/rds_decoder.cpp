@@ -20,14 +20,14 @@
 // Clause 3.2.1.6.3: AF method A
 void RDS_Decoder::PrintAltFreq(uint8_t x) {
     if (x == 0) {
-        APPEND_MESSAGE("Unused");
+        APPEND_MESSAGE("%s", "Unused");
         return;
     }
 
     // Table 11: Special meanings code table
     // Wait for this to occur to be able to contextualise following data
     if (x == 205) {
-        APPEND_MESSAGE("Filler");
+        APPEND_MESSAGE("%s", "Filler");
         return;
     }
     if ((x >= 224) && (x <= 249)) {
@@ -37,7 +37,7 @@ void RDS_Decoder::PrintAltFreq(uint8_t x) {
     }  
 
     if (x == 250) {
-        APPEND_MESSAGE("#LF/MF");
+        APPEND_MESSAGE("%s", "#LF/MF");
         return;
     }
 
@@ -65,11 +65,11 @@ void RDS_Decoder::PrintAltFreq(uint8_t x) {
         constexpr uint32_t base_freq = 531'000;
         constexpr uint32_t multiplier = 9'000;
         const uint32_t freq = base_freq + (uint32_t)(x-16)*multiplier;
-        APPEND_MESSAGE("MF=%.1fkHz", (float)freq * 1e-3);
+        APPEND_MESSAGE("%s", "MF=%.1fkHz", (float)freq * 1e-3);
         return;
     }
 
-    APPEND_MESSAGE("Unassigned");
+    APPEND_MESSAGE("%s", "Unassigned");
 }
 
 RDS_Decoder::RDS_Decoder() {
@@ -81,13 +81,13 @@ RDS_Decoder::~RDS_Decoder() = default;
 
 void RDS_Decoder::ProcessGroup(rds_group_t group) {
     // Begin text logging
-    APPEND_MESSAGE("[group] [");
+    APPEND_MESSAGE("%s", "[group] [");
     for (int i = 0; i < RDS_PARAMS.nb_blocks_per_group; i++) {
         auto& block = group[i];
         if (block.is_valid) APPEND_MESSAGE("%04X", block.data);
-        else                APPEND_MESSAGE("----");
-        if (i != (RDS_PARAMS.nb_blocks_per_group-1)) APPEND_MESSAGE(" ");
-        else                                         APPEND_MESSAGE("]");
+        else                APPEND_MESSAGE("%s", "----");
+        if (i != (RDS_PARAMS.nb_blocks_per_group-1)) APPEND_MESSAGE("%s", " ");
+        else                                         APPEND_MESSAGE("%s", "]");
     }
 
     // Clause 2.1: Baseband coding structure
@@ -103,12 +103,12 @@ void RDS_Decoder::ProcessGroup(rds_group_t group) {
     const uint8_t program_type  = (descriptor & 0b0000001111100000) >> 5;
     const uint8_t data          = (descriptor & 0b0000000000011111) >> 0;
 
-    APPEND_MESSAGE(" ");
+    APPEND_MESSAGE("%s", " ");
     if (block_A.is_valid) {
         HANDLER->OnProgrammeIdentifier(pi_code);
         APPEND_MESSAGE("PI=%04X, ", block_A.data);
     } else {
-        APPEND_MESSAGE("         ");
+        APPEND_MESSAGE("%s", "         ");
     }
 
     if (block_B.is_valid) {
@@ -140,14 +140,14 @@ bool RDS_Decoder::OnGroupType(rds_group_t group, uint8_t code, bool version) {
         case 11: return OnGroup11A(group);
         case 14: return OnGroup14A(group);
         default:
-            APPEND_MESSAGE("Unsupported_Code");
+            APPEND_MESSAGE("%s", "Unsupported_Code");
             return false;
         }
     // Version B
     } else {
         switch (code) {
         default:
-            APPEND_MESSAGE("Unsupported_Code");
+            APPEND_MESSAGE("%s", "Unsupported_Code");
             return false;
         }
     }
@@ -205,12 +205,12 @@ bool RDS_Decoder::OnGroup0A(rds_group_t group) {
         2, buf);
 
     // Clause 3.2.1.4: Music Speech (MS) switch code
-    APPEND_MESSAGE(", ");
+    APPEND_MESSAGE("%s", ", ");
     APPEND_MESSAGE("M/S=%s", ms_flag ? "music" : "speech");
 
     // Clause 3.2.1.5: Decoder Identification (DI) and Dynamic PTY Indicator (PTYI) codes
     // Table 9: Bit d0 to d3 meanings
-    APPEND_MESSAGE(", ");
+    APPEND_MESSAGE("%s", ", ");
     switch (segment_address) {
     case 0b00:  // d3
         HANDLER->OnDecoder_IsDynamicProgrammeType(decoder_bit);
@@ -230,15 +230,15 @@ bool RDS_Decoder::OnGroup0A(rds_group_t group) {
         break;
     }
 
-    APPEND_MESSAGE(", alt_freq=[");
+    APPEND_MESSAGE("%s", ", alt_freq=[");
     if (has_block_C) {
         PrintAltFreq(F0);
-        APPEND_MESSAGE(",");
+        APPEND_MESSAGE("%s", ",");
         PrintAltFreq(F1);
     } else {
-        APPEND_MESSAGE("?,?");
+        APPEND_MESSAGE("%s", "?,?");
     }
-    APPEND_MESSAGE("]");
+    APPEND_MESSAGE("%s", "]");
 
     return (has_block_C || has_block_D);
 }
@@ -262,7 +262,7 @@ bool RDS_Decoder::OnGroup1A(rds_group_t group) {
 
     APPEND_MESSAGE("radio_paging_code=%u, L/A=%u, variant=%u", 
         radio_paging_codes, linkage_actuator, variant_code);
-    APPEND_MESSAGE(", ");
+    APPEND_MESSAGE("%s", ", ");
 
     switch (variant_code) {
     case 0b000:
@@ -293,7 +293,7 @@ bool RDS_Decoder::OnGroup1A(rds_group_t group) {
         break;
     }
 
-    APPEND_MESSAGE(", ");
+    APPEND_MESSAGE("%s", ", ");
     APPEND_MESSAGE("day=%u, time=%02u:%02u", day, hour, minute);
 
     return (has_block_C || has_block_D);
@@ -447,7 +447,7 @@ bool RDS_Decoder::OnGroup11A(rds_group_t group) {
     // Figure 33: Open data - Type 11A and 11B groups
     // Clause 3.1.4 Open data channel / Applications Identification
     // TODO: This is not explicity specified in the standard
-    APPEND_MESSAGE("TODO");
+    APPEND_MESSAGE("%s", "TODO");
     return true;
 }
 
@@ -466,7 +466,7 @@ bool RDS_Decoder::OnGroup14A(rds_group_t group) {
     const uint16_t PI_on       =  block_D.data;
 
     APPEND_MESSAGE("TP(on)=%u, variant=%u", TP_on, variant_code);
-    APPEND_MESSAGE(", ");
+    APPEND_MESSAGE("%s", ", ");
 
     switch (variant_code) {
     case 0b0000:
@@ -484,11 +484,11 @@ bool RDS_Decoder::OnGroup14A(rds_group_t group) {
         {
             const uint8_t F0 = (data & 0xFF00) >> 8;
             const uint8_t F1 = (data & 0x00FF) >> 0;
-            APPEND_MESSAGE("AF(on)=[");
+            APPEND_MESSAGE("%s", "AF(on)=[");
             PrintAltFreq(F0);
-            APPEND_MESSAGE(",");
+            APPEND_MESSAGE("%s", ",");
             PrintAltFreq(F1);
-            APPEND_MESSAGE("]");
+            APPEND_MESSAGE("%s", "]");
         }
         break;
     case 0b0101:
@@ -499,7 +499,7 @@ bool RDS_Decoder::OnGroup14A(rds_group_t group) {
             // TODO: Unclear how the bitfield is structured from the figure
             // const uint8_t tuning_freq = data & 0b
             // const uint16_t mapped_fm_freq = data & 0b
-            APPEND_MESSAGE("tuning_freq=?, mapped_fm_freq=?");
+            APPEND_MESSAGE("%s", "tuning_freq=?, mapped_fm_freq=?");
         }
         break;
     case 0b1001:
@@ -507,7 +507,7 @@ bool RDS_Decoder::OnGroup14A(rds_group_t group) {
             // TODO: Unclear how the bitfield is structured from the figure
             // const uint8_t tuning_freq = data & 0b
             // const uint16_t mapped_am_freq = data & 0b
-            APPEND_MESSAGE("tuning_freq=?, mapped_am_freq=?");
+            APPEND_MESSAGE("%s", "tuning_freq=?, mapped_am_freq=?");
         }
         break;
     case 0b1100:
@@ -519,21 +519,21 @@ bool RDS_Decoder::OnGroup14A(rds_group_t group) {
             // const uint8_t PTY_on = data & 0b
             // const uint16_t rfu0 = data & 0b
             // const uint8_t TA = data & 0b
-            APPEND_MESSAGE("bitfield_todo");
+            APPEND_MESSAGE("%s", "bitfield_todo");
         }
         break;
     case 0b1110:
         APPEND_MESSAGE("PIN(on)=%04X", data);
         break;
     case 0b1111:
-        APPEND_MESSAGE("reserved_broadcasters");
+        APPEND_MESSAGE("%s", "reserved_broadcasters");
         break;
     default:
-        APPEND_MESSAGE("Unallocated");
+        APPEND_MESSAGE("%s", "Unallocated");
         break;
     }
 
-    APPEND_MESSAGE(", ");
+    APPEND_MESSAGE("%s", ", ");
     APPEND_MESSAGE("PI(on)=%04X", PI_on);
 
     return true;

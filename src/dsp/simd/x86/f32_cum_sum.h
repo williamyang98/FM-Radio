@@ -2,8 +2,8 @@
 
 #include <immintrin.h>
 #include <stdint.h>
-#include "simd_config.h"
-#include "data_packing.h"
+#include "../dsp_config.h"
+#include "./data_packing.h"
 
 // Accumulate sum packed float
 // NOTE: For performance we allow for modification of the input vector

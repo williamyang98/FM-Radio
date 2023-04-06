@@ -1,6 +1,6 @@
 #include "render_bpsk_sync.h"
 
-#include "demod/bpsk_synchroniser.h"
+#include "fm_demod/bpsk_synchroniser.h"
 
 #include <imgui.h>
 #include <implot.h>

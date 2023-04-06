@@ -1,6 +1,6 @@
 #include "render_fm_demod.h"
 
-#include "demod/broadcast_fm_demod.h"
+#include "fm_demod/broadcast_fm_demod.h"
 #include "dsp/calculate_fft_mag.h"
 #include <fmt/core.h>
 

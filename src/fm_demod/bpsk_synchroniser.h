@@ -6,10 +6,10 @@
 #include "dsp/integrator.h"
 #include "dsp/iir_filter.h"
 
-#include "demod/zero_crossing_detector.h"
-#include "demod/trigger_cooldown.h"
-#include "demod/ted_clock.h"
-#include "demod/pll_mixer.h"
+#include "zero_crossing_detector.h"
+#include "trigger_cooldown.h"
+#include "ted_clock.h"
+#include "pll_mixer.h"
 
 #include "utility/joint_allocate.h"
 #include "utility/span.h"
