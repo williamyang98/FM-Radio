@@ -16,9 +16,11 @@ As much of the internal state of the demodulator is shown for academic purposes.
 SIMD is employed to improve DSP performance on x86 processors. 
 
 ## Instructions
-1. Download program from releases page.
-2. Unzip and extract folder.
-3. Run <code>./bin/rtl_sdr.exe -f [fm_frequency] -s 1.024e6 -g 20 | ./main.exe</code>
+1. Setup rtlsdr radio drivers according to [here](https://www.rtl-sdr.com/rtl-sdr-quick-start-guide/)
+2. Plug in your RTLSDR Blog v3 dongle
+3. Download program from releases page.
+4. Unzip and extract folder.
+5. Run <code>./fm_demod_tuner.exe</code>
 
 ## Explanation
 FM radio contains many data components which are present after FM demodulation.
@@ -50,3 +52,9 @@ The RDS signal contains the following data described [here](https://en.wikipedia
 The document used to decode the standard (partially) is located [here](docs/EN50067_RDS_Standard.pdf).
 
 It usually contains the programme identifier code and additional descriptive text and metadata.
+
+## Running from offline data
+1. Download FM signal recording from [here](https://github.com/FiendChain/FM-Radio/releases/tag/sample_data).
+2. Extract <code>*.pcm</code> from archive
+3. Download program from releases page
+4. Run <code>./fm_demod_no_tuner.exe -i \<recording\>.pcm</code>

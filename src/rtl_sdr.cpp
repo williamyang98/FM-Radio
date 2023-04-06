@@ -39,7 +39,7 @@ extern "C" {
 #include <rtl-sdr.h>
 }
 
-constexpr int DEFAULT_SAMPLE_RATE = 2048000;
+constexpr int DEFAULT_SAMPLE_RATE = 1024000;
 constexpr int DEFAULT_BUF_LENGTH = 16*16384;
 constexpr int MINIMAL_BUF_LENGTH = 512;
 constexpr int MAXIMAL_BUF_LENGTH = 256*16384;
