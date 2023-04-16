@@ -27,7 +27,7 @@ public:
             PushBit(x[i]);
         }
     }
-    auto& OnRDSBytes() { return obs_on_buf; }
+    auto& OnBytes() { return obs_on_buf; }
 private:
     void PushBit(float x) {
         // Due to machenster encoding we can skip every other bit

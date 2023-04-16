@@ -33,7 +33,7 @@
 #include <fcntl.h>
 #endif
 
-#include "utility/getopt/getopt.h"
+#include "getopt/getopt.h"
 
 extern "C" {
 #include <rtl-sdr.h>

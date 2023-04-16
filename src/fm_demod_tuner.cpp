@@ -24,7 +24,7 @@
 #include "audio/resampled_pcm_player.h"
 #include "audio/portaudio_utility.h"
 #include "device/device_selector.h"
-#include "utility/getopt/getopt.h"
+#include "getopt/getopt.h"
 
 class Renderer: public ImguiSkeleton
 {
@@ -84,13 +84,18 @@ public:
     }
 };
 
+struct Arguments {
+    uint32_t block_size = 65536;
+};
+
 void usage() {
+    const auto args = Arguments();
+
     fprintf(stderr, 
         "fm_demod_tuner, Demodulate baseband FM signal from sdr device\n\n"
-        "\t[-o output filename (default: None)]\n"
-        "\t    If no file is provided then stdout is used\n"
-        "\t[-b block size (default: 65536)]\n"
-        "\t[-h (show usage)]\n"
+        "\t[-b block size (default: %u)]\n"
+        "\t[-h (show usage)]\n",
+        args.block_size
     );
 }
 
@@ -102,46 +107,35 @@ uint32_t power_ceil(uint32_t x) {
     return power;
 };
 
-int main(int argc, char** argv) {
-    int _block_size = 65536;
-    const char* wr_filename = NULL;
+Arguments parse_args(int argc, char** argv) {
+    Arguments args;
+    int block_size = int(args.block_size);
 
     int opt; 
-    while ((opt = getopt_custom(argc, argv, "o:b:h")) != -1) {
+    while ((opt = getopt_custom(argc, argv, "b:h")) != -1) {
         switch (opt) {
-        case 'o':
-            wr_filename = optarg;
-            break;
         case 'b':
-            _block_size = (int)(atof(optarg));
+            block_size = int(atof(optarg));
             break;
         case 'h':
         default:
             usage();
-            return 0;
+            exit(0);
         }
     }
-
-    if (_block_size <= 0) {
-        fprintf(stderr, "Block size must be positive (%d)\n", _block_size);
-        return 1;
+    
+    if (block_size <= 0) {
+        fprintf(stderr, "Block size must be positive (%d)\n", block_size);
+        exit(1);
     }
 
-    const uint32_t ceil_block_size = power_ceil((uint32_t)_block_size);
+    args.block_size = power_ceil(uint32_t(block_size));
+    return args;
+}
 
-    FILE* fp_out = stdout;
-    if (wr_filename != NULL) {
-        fp_out = fopen(wr_filename, "wb+");
-        if (fp_out == NULL) {
-            fprintf(stderr, "Failed to open file for writing\n");
-            return 1;
-        }
-    }
-
-    fprintf(stderr, "Using a block size of %u\n", ceil_block_size);
-#ifdef _WIN32
-    _setmode(_fileno(fp_out), _O_BINARY);
-#endif
+int main(int argc, char** argv) {
+    const auto args = parse_args(argc, argv);
+    fprintf(stderr, "Using a block size of %u\n", args.block_size);
 
     // Setup audio
     auto pa_handler = ScopedPaHandler();
@@ -164,7 +158,7 @@ int main(int argc, char** argv) {
     }
 
     // Setup fm demodulator
-    auto app = App(ceil_block_size);
+    auto app = App(args.block_size);
     app.OnAudioBlock().Attach([&pcm_player](tcb::span<const Frame<float>> x, int Fs) {
         pcm_player->SetInputSampleRate(Fs);
         pcm_player->ConsumeBuffer(x);

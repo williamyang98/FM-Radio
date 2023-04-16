@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #endif
 
-#include "app.h"
+#include "rds_decoder/rds_decoding_chain.h"
 #include "getopt/getopt.h"
 
 struct Arguments {
@@ -22,7 +22,7 @@ void usage() {
     const auto args = Arguments();
 
     fprintf(stderr, 
-        "fm_demod_benchmark, benchmark the fm demodulator decoding stack\n\n"
+        "rds_decode, decode rds bytes and prints rds data groups to stdout\n\n"
         "\t[-i input filename (default: %s)]\n"
         "\t    If no file is provided then stdin is used\n"
         "\t[-b block size (default: %u)]\n"
@@ -31,14 +31,6 @@ void usage() {
         args.block_size
     );
 }
-
-uint32_t power_ceil(uint32_t x) {
-    if (x <= 1) return 1;
-    uint32_t power = 2;
-    x--;
-    while (x >>= 1) power <<= 1;
-    return power;
-};
 
 Arguments parse_args(int argc, char** argv) {
     Arguments args;
@@ -65,7 +57,7 @@ Arguments parse_args(int argc, char** argv) {
         exit(1);
     }
 
-    args.block_size = power_ceil(uint32_t(block_size));
+    args.block_size = uint32_t(block_size);
     return args;
 }
 
@@ -76,7 +68,7 @@ int main(int argc, char** argv) {
     if (args.input_filename != NULL) {
         fp_in = fopen(args.input_filename, "rb");
         if (fp_in == NULL) {
-            fprintf(stderr, "Failed to open file for reading\n");
+            fprintf(stderr, "Failed to open file for reading (%s)\n", args.input_filename);
             return 1;
         }
     }
@@ -86,18 +78,17 @@ int main(int argc, char** argv) {
     _setmode(_fileno(fp_in), _O_BINARY);
 #endif
 
-    // Setup fm demodulator
-    auto app = App(args.block_size);
+    RDS_Decoding_Chain rds_decoding_chain {};
 
-    // Setup input
-    auto input_buf = std::vector<std::complex<uint8_t>>(args.block_size);
-    while (true) {
-        const size_t nb_read = fread((void*)input_buf.data(), sizeof(std::complex<uint8_t>), input_buf.size(), fp_in);
+    auto input_buf = std::vector<uint8_t>(args.block_size);
+    bool is_reading = true;
+    while (is_reading) {
+        const size_t nb_read = fread((void*)input_buf.data(), sizeof(uint8_t), input_buf.size(), fp_in);
         if (nb_read != input_buf.size()) {
             fprintf(stderr, "Failed to read %zu/%zu bytes\n", nb_read, input_buf.size());
-            break;
+            is_reading = false;
         }
-        app.Process(input_buf);
+        rds_decoding_chain.Process(input_buf);
     }
 
     return 0;

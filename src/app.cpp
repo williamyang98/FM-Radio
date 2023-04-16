@@ -1,6 +1,6 @@
 #include "app.h"
 #include "fm_demod/broadcast_fm_demod.h"
-#include "rds_decoder/rds_init.h"
+#include "rds_decoder/rds_decoding_chain.h"
 #include "rds_decoder/differential_manchester_decoder.h"
 
 constexpr size_t SIMD_ALIGN_AMOUNT = 32;
@@ -9,8 +9,6 @@ App::App(const int _block_size)
 : block_size(_block_size),
   input_buf(data_u8_buf) 
 {
-    is_output_rds_signal = false;
-
     aligned_block_buf = AllocateJoint(
         data_u8_buf,            BufferParameters{ (size_t)block_size },
         data_f32_buf,           BufferParameters{ (size_t)block_size, SIMD_ALIGN_AMOUNT },
@@ -27,12 +25,10 @@ App::App(const int _block_size)
      
     broadcast_fm_demod->OnRDSOut().Attach([this](tcb::span<const float> x) {
         differential_manchester_decoder->Process(x);
-        if (is_output_rds_signal) {
-            obs_on_rds_signal.Notify(x);
-        }
     });
 
-    differential_manchester_decoder->OnRDSBytes().Attach([this](tcb::span<const uint8_t> x) {
+    differential_manchester_decoder->OnBytes().Attach([this](tcb::span<const uint8_t> x) {
+        obs_on_rds_bytes.Notify(x);
         rds_decoding_chain->Process(x);
     });
 }

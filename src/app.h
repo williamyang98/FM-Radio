@@ -30,8 +30,7 @@ private:
     std::unique_ptr<DifferentialManchesterDecoder> differential_manchester_decoder;
     std::unique_ptr<RDS_Decoding_Chain> rds_decoding_chain;
 
-    bool is_output_rds_signal;
-    Observable<tcb::span<const float>> obs_on_rds_signal;
+    Observable<tcb::span<const uint8_t>> obs_on_rds_bytes;
     Observable<tcb::span<const Frame<float>>, int> obs_on_audio_block;
 public:
     explicit App(const int _block_size);
@@ -39,9 +38,9 @@ public:
     size_t Process(tcb::span<const std::complex<uint8_t>> x);
 public:
     auto& GetFMDemod() { return *(broadcast_fm_demod.get()); }
-    auto& GetIsOutputRDSSignal() { return is_output_rds_signal; }
     RDS_Database& GetRDSDatabase();
     auto& OnAudioBlock() { return obs_on_audio_block; }
+    auto& On_RDS_Bytes() { return obs_on_rds_bytes; }
 private:
     void Run();
 };
