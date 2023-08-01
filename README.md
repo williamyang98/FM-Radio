@@ -1,7 +1,6 @@
 # SDR FM Radio Demodulator
 [![x86-windows](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-windows.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-windows.yml)
 [![x86-ubuntu](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-ubuntu.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-ubuntu.yml)
-[![arm-ubuntu](https://github.com/FiendChain/FM-Radio/actions/workflows/arm-ubuntu.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/arm-ubuntu.yml)
 
 ## Introduction
 An implementation of a FM demodulator that supports
