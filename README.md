@@ -1,7 +1,7 @@
 # SDR FM Radio Demodulator
 [![x86-windows](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-windows.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-windows.yml)
-[![x86-linux](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-linux.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-linux.yml)
-[![arm-linux](https://github.com/FiendChain/FM-Radio/actions/workflows/arm-linux.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/arm-linux.yml)
+[![x86-ubuntu](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-ubuntu.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-ubuntu.yml)
+[![arm-ubuntu](https://github.com/FiendChain/FM-Radio/actions/workflows/arm-ubuntu.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/arm-ubuntu.yml)
 
 ## Introduction
 An implementation of a FM demodulator that supports
@@ -58,3 +58,8 @@ It usually contains the programme identifier code and additional descriptive tex
 2. Extract <code>*.pcm</code> from archive
 3. Download program from releases page
 4. Run <code>./fm_demod_no_tuner.exe -i \<recording\>.pcm</code>
+
+## Recompiling for older processors
+The release binaries are compiled against AVX2 which should be available on most modern processors. However if your CPU doesn't have these instructions, you may get an ```Illegal Instruction``` error when you run it in the terminal. 
+
+Follow ```./toolchains/*/README.md``` to compile for your CPU.

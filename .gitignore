@@ -5,3 +5,6 @@ data/
 *.ini
 *.zip
 .vscode/
+.cache/
+fm_radio_windows_x64/
+fm_radio_windows_x64.zip
