@@ -39,7 +39,10 @@ jobs:
       run: ./toolchains/arm/install_packages.sh
 
     - name: Configure CMake
-      run: ./toolchains/arm/cmake_configure.sh
+      shell: bash
+      run: |
+        export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+        cmake -B ${{github.workspace}}/build-arm -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -G Ninja -DCMAKE_TOOLCHAIN_FILE=./toolchains/arm/linux-gnu-toolchain.cmake
 
     - name: Build
       run: ninja -C build-arm
