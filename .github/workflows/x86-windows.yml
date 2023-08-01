@@ -47,7 +47,7 @@ jobs:
 
     - name: Configure CMake
       shell: bash
-      run: VCPKG_ROOT=${{github.workspace}}/vcpkg ./toolchains/windows/cmake_configure.sh
+      run: VCPKG_ROOT=./vcpkg ./toolchains/windows/cmake_configure.sh
 
     - name: Build
       shell: bash
