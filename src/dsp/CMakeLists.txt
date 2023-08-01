@@ -10,11 +10,11 @@ endif()
 add_library(dsp_lib STATIC
     ${SRC_DIR}/filter_designer.cpp
     ${SRC_DIR}/calculate_fft.cpp
-    ${SRC_DIR}/calculate_fft_mag.cpp)
+    ${SRC_DIR}/calculate_fft_mag.cpp
+    ${SRC_DIR}/simd/apply_harmonic_pll.cpp
+    ${SRC_DIR}/simd/c32_f32_cum_mul.cpp
+    ${SRC_DIR}/simd/f32_cum_mul.cpp
+)
 set_target_properties(dsp_lib PROPERTIES CXX_STANDARD 17)
 target_include_directories(dsp_lib PRIVATE ${SRC_DIR} ${ROOT_DIR})
 target_link_libraries(dsp_lib PRIVATE ${FFTW3_LIBS})
-
-if(MSVC)
-target_compile_options(dsp_lib PRIVATE "/MP")
-endif()

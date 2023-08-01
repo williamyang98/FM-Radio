@@ -2,13 +2,13 @@
 
 #include <immintrin.h>
 #include <stdint.h>
-#include "../dsp_config.h"
+#include "../simd_flags.h"
 
 // Multiply packed complex float 
 
-#if defined(_DSP_AVX2)
+#if defined(__AVX__)
 static inline
-__m256 c32_mul_avx2(__m256 x0, __m256 x1) {
+__m256 c32_mul_avx(__m256 x0, __m256 x1) {
     // Vectorise complex multiplication
     // [3 2 1 0] -> [2 3 0 1]
     constexpr uint8_t SWAP_COMPONENT_MASK = 0b10110001;
@@ -26,7 +26,7 @@ __m256 c32_mul_avx2(__m256 x0, __m256 x1) {
     // [bd bc]
     __m256 b0 = _mm256_mul_ps(a2, a0);
 
-    #if !defined(_DSP_FMA)
+    #if !defined(__FMA__)
     // [ac ad]
     __m256 b1 = _mm256_mul_ps(a1, x0);
     // [ac-bd ad+bc]
@@ -40,9 +40,9 @@ __m256 c32_mul_avx2(__m256 x0, __m256 x1) {
 }
 #endif
 
-#if defined(_DSP_SSSE3)
+#if defined(__SSE3__)
 static inline
-__m128 c32_mul_ssse3(__m128 x0, __m128 x1) {
+__m128 c32_mul_sse3(__m128 x0, __m128 x1) {
     // Vectorise complex multiplication
     // [3 2 1 0] -> [2 3 0 1]
     constexpr uint8_t SWAP_COMPONENT_MASK = 0b10110001;
@@ -60,7 +60,7 @@ __m128 c32_mul_ssse3(__m128 x0, __m128 x1) {
     // [bd bc]
     __m128 b0 = _mm_mul_ps(a2, a0);
 
-    #if !defined(_DSP_FMA)
+    #if !defined(__FMA__)
     // [ac ad]
     __m128 b1 = _mm_mul_ps(a1, x1);
     // [ac-bd ad+bc]
