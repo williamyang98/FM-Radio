@@ -1,6 +1,6 @@
 # SDR FM Radio Demodulator
-[![x86-windows](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-windows.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-windows.yml)
-[![x86-ubuntu](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-ubuntu.yml/badge.svg)](https://github.com/FiendChain/FM-Radio/actions/workflows/x86-ubuntu.yml)
+[![x86-windows](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-windows.yml/badge.svg)](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-windows.yml)
+[![x86-ubuntu](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-ubuntu.yml/badge.svg)](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-ubuntu.yml)
 
 ## Introduction
 An implementation of a FM demodulator that supports
@@ -53,7 +53,7 @@ The document used to decode the standard (partially) is located [here](docs/EN50
 It usually contains the programme identifier code and additional descriptive text and metadata.
 
 ## Running from offline data
-1. Download FM signal recording from [here](https://github.com/FiendChain/FM-Radio/releases/tag/sample_data).
+1. Download FM signal recording from [here](https://github.com/williamyang98/FM-Radio/releases/tag/sample_data).
 2. Extract <code>*.pcm</code> from archive
 3. Download program from releases page
 4. Run <code>./fm_demod_no_tuner.exe -i \<recording\>.pcm</code>

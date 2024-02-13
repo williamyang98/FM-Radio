@@ -11,4 +11,4 @@
 	url = https://github.com/fmtlib/fmt.git
 [submodule "vendor/librtlsdr"]
 	path = vendor/librtlsdr
-	url = https://github.com/FiendChain/librtlsdr_cmake.git
+	url = https://github.com/williamyang98/librtlsdr_cmake.git
