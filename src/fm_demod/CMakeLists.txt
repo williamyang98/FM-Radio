@@ -8,7 +8,6 @@ add_library(fm_demod STATIC
     ${SRC_DIR}/broadcast_fm_demod.cpp
     ${SRC_DIR}/bpsk_synchroniser.cpp
     ${SRC_DIR}/pll_mixer.cpp
-    ${SRC_DIR}/local_oscillator.cpp
     ${SRC_DIR}/trigger_cooldown.cpp
     ${SRC_DIR}/zero_crossing_detector.cpp
     ${SRC_DIR}/ted_clock.cpp)
