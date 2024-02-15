@@ -4,6 +4,7 @@
 #include "bpsk_synchroniser.h"
 #include "dsp/filter_designer.h"
 #include "dsp/clamp.h"
+#include "dsp/simd/chebyshev_sine.h"
 
 constexpr int SIMD_ALIGN_AMOUNT = 32;
 
@@ -115,8 +116,11 @@ int BPSK_Synchroniser::Process(
         // pll = exp(j*theta)
         // v0 = exp(j*phi)
         // v1 = v0 * pll = exp(j*(theta+phi))
-        const auto pll_dt = pll_mixer.Update();
-        const auto pll = std::complex<float>(std::cos(pll_dt), std::sin(pll_dt));
+        // wrap between [-0.5,+0.5] for chebyshev sine approximation
+        const float pll_dt_sin = pll_mixer.Update(); // already wrapped
+        float pll_dt_cos = pll_dt_sin+0.25f;
+        pll_dt_cos = pll_dt_cos - std::round(pll_dt_cos);
+        const auto pll = std::complex<float>(chebyshev_sine(pll_dt_cos), chebyshev_sine(pll_dt_sin)); 
         const auto IQ = x[i] * pll;
 
         // IQ zero crossing detector on imaginary component
