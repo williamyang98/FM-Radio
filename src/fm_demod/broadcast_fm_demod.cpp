@@ -12,12 +12,8 @@
 #include "dsp/fftshift.h"
 #include "dsp/clamp.h"
 #include "dsp/simd/apply_harmonic_pll.h"
+#include "dsp/simd/chebyshev_sine.h"
 
-
-inline static 
-std::complex<float> GetPhasor(float dt) { 
-    return std::complex<float>(std::cos(dt), std::sin(dt)); 
-};
 
 static 
 void ConfigureFFTCalc(Calculate_FFT_Mag& calc) {
@@ -440,16 +436,19 @@ void Broadcast_FM_Demod::LockOntoPilot() {
             phase_error_lpf*Kp + 
             integrator_phase_error.yn;
         mixer.phase_error = PI_error;
-
-        const float dt = mixer.Update();
-        const auto pll = GetPhasor(dt); 
+ 
+        // wrap between [-0.5,+0.5] for chebyshev sine approximation
+        const float dt_sin = mixer.Update(); // already wrapped
+        float dt_cos = dt_sin+0.25f;
+        dt_cos = dt_cos - std::round(dt_cos);
+        const auto pll = std::complex<float>(chebyshev_sine(dt_cos), chebyshev_sine(dt_sin)); 
 
         // Update pilot tone PLL phase error
         // exp(jw0t + phi)*exp(-jw0t) = exp(phi)
         const auto pll_residual = pilot_buf[i] * pll;
         prev_phase_error = std::atan2(pll_residual.imag(), pll_residual.real());
 
-        pll_dt_buf[i] = dt;
+        pll_dt_buf[i] = dt_sin;
         pll_buf[i] = pll;
         pll_raw_phase_error[i] = prev_phase_error;
         pll_lpf_phase_error[i] = PI_error;

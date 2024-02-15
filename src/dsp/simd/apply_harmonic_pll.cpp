@@ -1,4 +1,3 @@
-#define _USE_MATH_DEFINES
 #include <cmath>
 #include <complex>
 #include <assert.h>
@@ -7,6 +6,7 @@
 #include "./apply_harmonic_pll.h"
 #include "./detect_architecture.h"
 #include "./simd_flags.h"
+#include "./chebyshev_sine.h"
 
 void apply_harmonic_pll_scalar(
     const float* dt, const std::complex<float>* x, std::complex<float>* y, const int N,
@@ -14,28 +14,20 @@ void apply_harmonic_pll_scalar(
 {
     for (int i = 0; i < N; i++) {
         const float dt_0 = dt[i];
-        const float dt_c = dt_0*harmonic + offset;
-        const auto pll = std::complex<float>(std::cos(dt_c), std::sin(dt_c));
+        float dt_sin = dt_0*harmonic + offset;
+        float dt_cos = dt_sin+0.25f;
+        dt_sin = dt_sin - std::round(dt_sin);
+        dt_cos = dt_cos - std::round(dt_cos);
+        const auto pll = std::complex<float>(chebyshev_sine(dt_cos), chebyshev_sine(dt_sin));
         y[i] = x[i] * pll;
     }
 }
 
 #if defined(__ARCH_X86__)
 
-#if defined(_MSC_VER) && !defined(__clang__)
-#define IS_INTEL_SVML_PRESENT 1
-#endif
-
 #if defined(__SSE3__)
 #include <immintrin.h>
 #include "./x86/c32_mul.h"
-
-#if !IS_INTEL_SVML_PRESENT
-#define USE_SSE_AUTO
-#define SSE_MATHFUN_WITH_CODE
-#include "./x86/sse_mathfun.h"
-#define _mm_cos_ps(x) cos_ps(x)
-#endif
 
 void apply_harmonic_pll_sse3(
     const float* dt, const std::complex<float>* x, std::complex<float>* y, const int N,
@@ -51,7 +43,7 @@ void apply_harmonic_pll_sse3(
     const __m128 harmonic_vec = _mm_set1_ps(harmonic);
     alignas(16) std::complex<float> _offset_vec[K];
     for (int i = 0; i < K; i++) {
-        _offset_vec[i] = { 0.0f + offset, -float(M_PI)/2.0f + offset };
+        _offset_vec[i] = { offset + 0.25f, offset };
     }
     __m128 offset_vec = _mm_load_ps(reinterpret_cast<const float *>(_offset_vec));
 
@@ -75,8 +67,10 @@ void apply_harmonic_pll_sse3(
         dt_vec = _mm_mul_ps(dt_vec, harmonic_vec);
         // Apply offset and phase split for cos+jsin
         dt_vec = _mm_add_ps(dt_vec, offset_vec);
-
-        __m128 b1 = _mm_cos_ps(dt_vec);
+        // Keep between [-0.5,+0.5] for chebyshev sine
+        constexpr int ROUND_FLAGS = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
+        dt_vec = _mm_sub_ps(dt_vec, _mm_round_ps(dt_vec, ROUND_FLAGS));
+        __m128 b1 = _mm_chebyshev_sine(dt_vec);
         __m128 res = c32_mul_sse3(b0, b1);
         _mm_storeu_ps(reinterpret_cast<float*>(&y[i]), res);
     }
@@ -90,11 +84,6 @@ void apply_harmonic_pll_sse3(
 #if defined(__AVX__)
 #include <immintrin.h>
 #include "./x86/c32_mul.h"
-
-#if !IS_INTEL_SVML_PRESENT
-#include "./x86/avx_mathfun.h"
-#define _mm256_cos_ps(x) cos256_ps(x)
-#endif
 
 void apply_harmonic_pll_avx(
     const float* dt, const std::complex<float>* x, std::complex<float>* y, const int N,
@@ -110,7 +99,7 @@ void apply_harmonic_pll_avx(
     const __m256 harmonic_vec = _mm256_set1_ps(harmonic);
     alignas(32) std::complex<float> _offset_vec[K];
     for (int i = 0; i < K; i++) {
-        _offset_vec[i] = { 0.0f + offset, -float(M_PI)/2.0f + offset };
+        _offset_vec[i] = { offset+0.25f, offset };
     }
     __m256 offset_vec = _mm256_load_ps(reinterpret_cast<const float*>(_offset_vec));
 
@@ -136,8 +125,10 @@ void apply_harmonic_pll_avx(
         dt_vec = _mm256_mul_ps(dt_vec, harmonic_vec);
         // Apply offset and phase split for cos+jsin
         dt_vec = _mm256_add_ps(dt_vec, offset_vec);
-
-        __m256 b1 = _mm256_cos_ps(dt_vec);
+        // Keep between [-0.5,+0.5] for chebyshev sine
+        constexpr int ROUND_FLAGS = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
+        dt_vec = _mm256_sub_ps(dt_vec, _mm256_round_ps(dt_vec, ROUND_FLAGS));
+        __m256 b1 = _mm256_chebyshev_sine(dt_vec);
         __m256 res = c32_mul_avx(b0, b1);
         _mm256_storeu_ps(reinterpret_cast<float*>(&y[i]), res);
     }
