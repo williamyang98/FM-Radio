@@ -1,4 +1,4 @@
-name: x86-ubuntu
+name: x86-macos
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ on:
 env:
   BUILD_TYPE: Release
   BUILD_DIR: build
+  OSX_TARGET: "12.0"
 
 jobs:
   skip_check:
@@ -22,34 +23,34 @@ jobs:
         concurrent_skipping: 'same_content'
         cancel_others: 'true'
         skip_after_successful_duplicate: 'true'
-        paths_ignore: '["**/README.md", "**/docs/**", "**/LICENSE.txt", "vcpkg.json", "toolchains/arm/*", "toolchains/windows/*", "toolchains/macos/*"]'
+        paths_ignore: '["**/README.md", "**/docs/**", "**/LICENSE.txt", "vcpkg.json", "toolchains/windows/*", "toolchains/ubuntu/*", "toolchains/arm/*"]'
         do_not_skip: '["workflow_dispatch", "schedule"]'
 
   build:
     needs: skip_check
     if: needs.skip_check.outputs.should_skip != 'true'
 
-    runs-on: ubuntu-22.04
+    runs-on: macos-12 
 
     steps:
     - uses: actions/checkout@v3
       with: 
         submodules: recursive 
- 
-    - name: Update packages 
-      run: sudo apt-get update 
 
-    - name: Install packages
-      run: ./toolchains/ubuntu/install_packages.sh
+    - name: Update brew
+      run: brew update
+
+    - name: Install dependencies 
+      run: brew bundle install --file=./toolchains/macos/Brewfile
 
     - name: Configure CMake
-      run: cmake . -B ${{env.BUILD_DIR}} --preset gcc -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: cmake . -B ${{env.BUILD_DIR}} --preset clang -DCMAKE_OSX_DEPLOYMENT_TARGET=${{env.OSX_TARGET}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
       run: cmake --build ${{env.BUILD_DIR}} --config ${{env.BUILD_TYPE}}
 
-    - name: Upload files (Release) 
+    - name: Upload files (Release)
       uses: actions/upload-artifact@v3
       with:
-        name: fm_radio_ubuntu_x64
+        name: fm_radio_macos_x64
         path: ${{github.workspace}}/${{env.BUILD_DIR}}

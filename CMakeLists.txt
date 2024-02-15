@@ -38,21 +38,4 @@ if(NOT WIN32)
     link_libraries(Threads::Threads)
 endif()
 
-# simd compile options
-if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    if(MSVC)
-        add_compile_definitions(_SILENCE_NONFLOATING_COMPLEX_DEPRECATION_WARNING)
-        add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-        # for MSVC multi processor compilation
-        add_compile_options(/MP)
-        add_compile_options(/fp:fast /arch:AVX2)
-        # add_compile_options(/fp:fast /arch:AVX)
-        # add_compile_options(/fp:fast)
-    else()
-        add_compile_options(-march=native -ffast-math)
-    endif()
-else()
-    add_compile_options(-ffast-math)
-endif()
-
 add_subdirectory(${CMAKE_SOURCE_DIR}/src)

@@ -1,6 +1,7 @@
 # SDR FM Radio Demodulator
 [![x86-windows](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-windows.yml/badge.svg)](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-windows.yml)
 [![x86-ubuntu](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-ubuntu.yml/badge.svg)](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-ubuntu.yml)
+[![x86-macos](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-macos.yml/badge.svg)](https://github.com/williamyang98/FM-Radio/actions/workflows/x86-macos.yml)
 
 ## Introduction
 An implementation of a FM demodulator that supports
