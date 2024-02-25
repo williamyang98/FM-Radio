@@ -1,5 +1,6 @@
 #pragma once
-#include "utility/aligned_vector.h"
+#include <vector>
+#include "utility/aligned_allocator.hpp"
 
 #define _min(A,B) (A > B) ? B : A
 #define _max(A,B) (A > B) ? A : B
@@ -9,11 +10,11 @@ class FIR_Filter
 {
 protected:
     const int K;
-    AlignedVector<float> b;
-    AlignedVector<T> xn;
-    AlignedVector<T> tmp;
+    std::vector<float, AlignedAllocator<float>> b;
+    std::vector<T, AlignedAllocator<T>> xn;
+    std::vector<T, AlignedAllocator<T>> tmp;
 public:
-    float* get_b() const { return b.data(); }
+    float* get_b() { return b.data(); }
     int    get_K() const { return K; }
 public:
     FIR_Filter(const int _K) 

@@ -1,5 +1,6 @@
 #pragma once
-#include "utility/aligned_vector.h"
+#include <vector>
+#include "utility/aligned_allocator.hpp"
 
 #define _min(A,B) (A > B) ? B : A
 #define _max(A,B) (A > B) ? A : B
@@ -8,8 +9,8 @@ template <typename T>
 class Delay_Line
 {
 public:
-    AlignedVector<T> xn;
-    AlignedVector<T> tmp;
+    std::vector<T, AlignedAllocator<T>> xn;
+    std::vector<T, AlignedAllocator<T>> tmp;
     const int K;
 public:
     Delay_Line(const int _K, T v = 0)

@@ -5,6 +5,7 @@
 #include "dsp/filter_designer.h"
 #include "dsp/clamp.h"
 #include "dsp/simd/chebyshev_sine.h"
+#include "utility/joint_allocate.h"
 
 constexpr int SIMD_ALIGN_AMOUNT = 32;
 

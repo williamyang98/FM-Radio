@@ -6,6 +6,7 @@
 #include <memory>
 #include <complex>
 #include <assert.h>
+#include <vector>
 
 #ifdef _WIN32
 #include <io.h>
@@ -18,6 +19,7 @@
 #include "fm_scraper.h"
 #include "getopt/getopt.h"
 
+#include "utility/aligned_allocator.hpp"
 #include "utility/joint_allocate.h"
 #include "utility/observable.h"
 #include "utility/reconstruction_buffer.h"
@@ -27,7 +29,7 @@ class App
 private:
     const int block_size;
 
-    AlignedVector<uint8_t> aligned_block_buf;
+    std::vector<uint8_t, AlignedAllocator<uint8_t>> aligned_block_buf;
     tcb::span<std::complex<uint8_t>> data_u8_buf;
     tcb::span<std::complex<float>> data_f32_buf;
     tcb::span<uint8_t> rds_bytes_decode_buf;

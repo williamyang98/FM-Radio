@@ -1,18 +1,19 @@
 #pragma once
-#include "utility/aligned_vector.h"
+#include <vector>
+#include "utility/aligned_allocator.hpp"
 
 template <typename T>
 class IIR_Filter
 {
 private:
     const int K;
-    AlignedVector<float> b;
-    AlignedVector<float> a;
-    AlignedVector<T> xn;
-    AlignedVector<T> yn;
+    std::vector<float, AlignedAllocator<float>> b;
+    std::vector<float, AlignedAllocator<float>> a;
+    std::vector<T, AlignedAllocator<T>> xn;
+    std::vector<T, AlignedAllocator<T>> yn;
 public:
-    float* get_b() const { return b.data(); }
-    float* get_a() const { return a.data(); }
+    float* get_b() { return b.data(); }
+    float* get_a() { return a.data(); }
     int    get_K() const { return K; }
 public:
     IIR_Filter(const int _K) 

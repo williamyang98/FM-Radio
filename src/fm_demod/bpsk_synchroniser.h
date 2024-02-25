@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <complex>
+#include <vector>
 
 #include "dsp/integrator.h"
 #include "dsp/iir_filter.h"
@@ -11,7 +12,7 @@
 #include "ted_clock.h"
 #include "pll_mixer.h"
 
-#include "utility/joint_allocate.h"
+#include "utility/aligned_allocator.hpp"
 #include "utility/span.h"
 
 struct BPSK_Synchroniser_Config {
@@ -57,7 +58,7 @@ private:
     std::unique_ptr<IIR_Filter<float>> filt_iir_lpf_pll_phase_error;
     float pll_prev_phase_error;
 
-    AlignedVector<uint8_t> aligned_block_buf;
+    std::vector<uint8_t, AlignedAllocator<uint8_t>> aligned_block_buf;
     // internal buffers
     tcb::span<std::complex<float>> pll_sym_buf;
     tcb::span<bool> zcd_trig_buf;

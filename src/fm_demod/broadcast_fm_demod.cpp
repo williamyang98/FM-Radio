@@ -14,6 +14,7 @@
 #include "dsp/simd/apply_harmonic_pll.h"
 #include "dsp/simd/chebyshev_sine.h"
 
+#include "utility/joint_allocate.h"
 
 static 
 void ConfigureFFTCalc(Calculate_FFT_Mag& calc) {
@@ -121,7 +122,7 @@ Broadcast_FM_Demod::Broadcast_FM_Demod(const int _block_size)
         fft_rds_buf,            BufferParameters{ (size_t)block_size_rds, SIMD_ALIGN_AMOUNT },
         fft_mag_rds_buf,        BufferParameters{ (size_t)block_size_rds, SIMD_ALIGN_AMOUNT }
     );
-    std::memset(aligned_block_buf.begin(), 0, aligned_block_buf.size());
+    std::memset(aligned_block_buf.data(), 0, aligned_block_buf.size());
 
     // NOTE: We introduce some early rolloff to the downsampling filters
     // This way we make sure we don't alias any higher frequency data into our baseband

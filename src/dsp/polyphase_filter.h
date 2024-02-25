@@ -1,5 +1,6 @@
 #pragma once
-#include "utility/aligned_vector.h"
+#include <vector>
+#include "utility/aligned_allocator.hpp"
 
 #define _min(A,B) (A > B) ? B : A
 #define _max(A,B) (A > B) ? A : B
@@ -11,11 +12,11 @@ private:
     const int M;
     const int K;
     const int NN;
-    AlignedVector<float> b;
-    AlignedVector<T> xn;
+    std::vector<float, AlignedAllocator<float>> b;
+    std::vector<T, AlignedAllocator<T>> xn;
 public:
-    float* get_b() const { return b.data(); }
-    int    get_K() const { return NN; }
+    float* get_b() { return b.data(); }
+    int get_K() const { return NN; }
 public:
     // b = FIR filter with M*K coefficients
     // M = downsampling factor and total phases 
@@ -92,8 +93,8 @@ private:
     const int L;
     const int K;
     const int NN;
-    AlignedVector<float> b;
-    AlignedVector<T> xn;
+    std::vector<float, AlignedAllocator<float>> b;
+    std::vector<T, AlignedAllocator<T>> xn;
 public:
     // b = FIR filter coefficients of length L*K
     // L = upsampling factor and total phases

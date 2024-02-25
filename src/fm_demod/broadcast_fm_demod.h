@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <complex>
+#include <vector>
 
 #include "dsp/iir_filter.h"
 #include "dsp/fir_filter.h"
@@ -16,7 +17,7 @@
 
 #include "audio/frame.h"
 
-#include "utility/joint_allocate.h"
+#include "utility/aligned_allocator.hpp"
 #include "utility/observable.h"
 
 // Forward declare
@@ -165,7 +166,7 @@ private:
     int rds_total_symbols;
 
     // Allocate buffers aligned
-    AlignedVector<uint8_t> aligned_block_buf;
+    std::vector<uint8_t, AlignedAllocator<uint8_t>> aligned_block_buf;
     // 1. FM demodulation
     tcb::span<std::complex<float>> fm_in_buf;
     tcb::span<float> fm_demod_buf;
